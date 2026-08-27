@@ -1,0 +1,93 @@
+/*-- scss:defaults --*/
+// 강의 슬라이드 테마 — 밝고 강렬한 한국어 ML 강의 스타일
+// (흰 배경 · 두꺼운 볼드 제목 · 알록달록 강조 · 핑크 알약 · 굵은 화살표)
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+
+// 색 토큰 (참고 스타일에서 추출)
+$brand:  #1AB18B;   // 브랜드(청록)
+$emred:  #E8402E;   // 핵심 키워드 강조
+$emgrn:  #2FA84F;   // 부연 설명
+$emamb:  #F08C1D;   // why? / 소제목
+$empink: #E84A9C;   // 알약 라벨
+$navy:   #23368C;   // 영어 기술 용어
+$ink:    #1a1a1a;
+
+$backgroundColor: #ffffff;
+$mainFont: "Noto Sans KR", "Pretendard", "Malgun Gothic", sans-serif;
+$mainFontSize: 30px;
+$mainColor: $ink;
+$headingFont: "Noto Sans KR", "Pretendard", sans-serif;
+$headingColor: $ink;
+$headingFontWeight: 900;
+$headingTextShadow: none;
+$linkColor: $brand;
+$selectionBackgroundColor: rgba($brand, 0.25);
+$presentation-heading-line-height: 1.25;
+
+/*-- scss:rules --*/
+.reveal { letter-spacing: -0.01em; }
+
+// 제목 — 아주 두껍게
+.reveal h1 { font-weight: 900; font-size: 2.0em; letter-spacing: -0.03em; }
+.reveal h2 { font-weight: 900; font-size: 1.5em; letter-spacing: -0.03em; margin-bottom: 0.5em; }
+.reveal h3 { font-weight: 700; color: $navy; }
+
+// 강조 유틸 클래스
+.imp   { color: $brand;  font-weight: 900; }   // 브랜드 강조
+.red   { color: $emred;  font-weight: 900; }   // 핵심 키워드
+.grn   { color: $emgrn;  font-weight: 700; }   // 부연
+.amb   { color: $emamb;  font-weight: 700; }   // why?/소제목
+.navy  { color: $navy;   font-weight: 700; }   // 영어 용어
+
+// 알약형 라벨 (강아지/고양이 같은 범주)
+.pill {
+  display: inline-block;
+  background: $empink; color: #fff; font-weight: 900;
+  padding: 0.12em 0.7em; border-radius: 999px; margin: 0.1em 0.15em;
+  box-shadow: 0 2px 0 rgba(0,0,0,0.08);
+}
+.pill.teal { background: $brand; }
+.pill.navy { background: $navy; }
+.pill.amber{ background: $emamb; }
+
+// 컬러 테두리 콜아웃 박스
+.callbox {
+  border: 3px solid $emamb; border-radius: 14px;
+  background: #fffaf2; padding: 0.5em 0.9em; display: inline-block;
+  font-weight: 700; line-height: 1.5;
+}
+.callbox.teal { border-color: $brand; background: #f1fbf8; }
+.callbox.red  { border-color: $emred; background: #fdf3f2; }
+
+// 핵심 한 줄 강조(가로 막대)
+.keyline {
+  background: #f1fbf8; border-left: 8px solid $brand;
+  padding: 0.4em 0.8em; border-radius: 0 10px 10px 0; font-weight: 700;
+}
+
+// 리스트 여백/불릿
+.reveal ul { line-height: 1.55; }
+.reveal ul li { margin-bottom: 0.35em; }
+.reveal strong { color: #000; font-weight: 900; }
+
+// 그림 — 중앙, 둥근 테두리 없이 깔끔
+.reveal img { border-radius: 8px; }
+.reveal figure figcaption { font-size: 0.5em; color: #666; }
+
+// 코드블록 — 밝은 회색, 큰 글자
+.reveal pre { box-shadow: none; border: 1px solid #eee; border-radius: 10px; width: 100%; }
+.reveal pre code { font-size: 0.62em; line-height: 1.4; padding: 0.8em; }
+
+// 굵은 화살표 텍스트(→) 강조
+.arrow { color: #b9bdc4; font-weight: 900; font-size: 1.3em; vertical-align: middle; }
+
+// 각주/출처
+.reveal .footer-note { position: absolute; bottom: 8px; right: 16px; font-size: 0.42em; color: #aaa; }
+
+// 표
+.reveal table { font-size: 0.72em; }
+.reveal table thead th { background: #f2fbf8; border-bottom: 2px solid $brand; }
+
+// 슬라이드 번호/진행바 브랜드색
+.reveal .progress { color: $brand; }

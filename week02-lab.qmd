@@ -1,0 +1,129 @@
+# 2주차 코딩실습
+
+이번 실습에서는 CSV와 JSON처럼 서로 다른 형식의 데이터를 하나의 SQLite 데이터베이스로 통합합니다. 앞의 30분은 예제 코드, 뒤의 30분은 학생 실습 과제입니다. 주제 데이터는 형식이 조금씩 다른 여러 지점의 기록입니다.
+
+## 예제 코드
+
+주제 데이터는 "여러 지점에서 모인 편의점 판매 기록"입니다. 지점마다 형식이 다른 상황을 재현합니다.
+
+```python
+import sqlite3, json
+
+conn = sqlite3.connect("store.db")
+cur = conn.cursor()
+
+# 1) 통합 판매 테이블
+cur.execute("""
+CREATE TABLE IF NOT EXISTS sales (
+    sale_id  INTEGER PRIMARY KEY,
+    store    TEXT,      -- 지점명
+    product  TEXT,      -- 상품명
+    qty      INTEGER,   -- 수량
+    amount   INTEGER,   -- 금액(원)
+    source   TEXT       -- 출처 형식 표시(csv/json)
+)""")
+
+# 2) A지점: 정형(CSV 형태 튜플)
+a_rows = [
+    (1, "A지점", "삼각김밥", 3, 3600, "csv"),
+    (2, "A지점", "생수",     2, 1600, "csv"),
+]
+cur.executemany("INSERT OR REPLACE INTO sales VALUES (?,?,?,?,?,?)", a_rows)
+
+# 3) B지점: 반정형(JSON, 필드명이 다르고 일부 누락)
+b_json = [
+    {"id": 3, "item": "커피", "count": 1, "price": 1800},
+    {"id": 4, "item": "우유", "count": 2},   # price 누락!
+]
+for r in b_json:
+    cur.execute(
+        "INSERT OR REPLACE INTO sales VALUES (?,?,?,?,?,?)",
+        (r["id"], "B지점", r["item"], r["count"], r.get("price"), "json")
+    )
+conn.commit()
+
+# 4) 통합 후 지점별 매출 집계
+print("== 지점별 매출 ==")
+for store, total, cnt in cur.execute("""
+    SELECT store, SUM(amount) AS total, COUNT(*) AS cnt
+    FROM sales GROUP BY store"""):
+    print(f"  {store}: 매출 {total}원, 거래 {cnt}건")
+
+# 5) 금액이 비어 있는(NULL) 레코드 찾기 — 완전성 점검 맛보기
+print("\n== 금액 결측 레코드 ==")
+for r in cur.execute("SELECT sale_id, product FROM sales WHERE amount IS NULL"):
+    print("  ", r)
+
+conn.close()
+```
+
+두 가지에 주목합니다. 첫째, JSON의 유연함(어떤 레코드에는 `price`가 없음)을 `r.get("price")`로 안전하게 처리했습니다. 둘째, B지점의 "우유"는 `price`가 없어 `amount`가 `NULL`이 되고, 5번 쿼리가 이를 잡아냅니다. 이렇게 서로 다른 소스를 합칠 때 결측이 자연스럽게 발생하며, 이는 5~6주차 정제의 출발점이 됩니다.
+
+## 코드 문제
+
+주제는 "두 병원에서 모인 예약 기록"입니다. 새 파일 `week02_practice.py`를 만들어 아래 문제를 순서대로 해결하세요.
+
+```python
+import sqlite3
+
+conn = sqlite3.connect("clinic.db")
+cur = conn.cursor()
+
+# [문제 1] appointments 테이블을 만드세요.
+#   컬럼: appt_id(정수,기본키), hospital(문자), patient_age(정수),
+#         department(문자), wait_min(정수, 대기시간), source(문자)
+
+# [문제 2] '가나병원' 데이터(정형)를 executemany로 삽입하세요.
+#   (1,'가나병원',34,'내과',15,'csv')
+#   (2,'가나병원',52,'정형외과',40,'csv')
+#   (3,'가나병원',28,'내과',10,'csv')
+
+# [문제 3] '다라병원' 데이터(JSON, 일부 필드 누락)를 삽입하세요.
+#   [{"id":4,"dept":"소아과","age":6,"wait":25},
+#    {"id":5,"dept":"내과","age":45}]   # wait 누락!
+#   힌트: r.get("wait")로 안전하게 처리, hospital은 '다라병원', source는 'json'
+
+# [문제 4] 진료과(department)별 평균 대기시간과 예약 건수를 구하세요.
+#   힌트: GROUP BY department, AVG(wait_min), COUNT(*)
+
+# [문제 5] 대기시간이 비어 있는(NULL) 예약을 찾아 출력하세요.
+#   힌트: WHERE wait_min IS NULL
+
+conn.close()
+```
+
+**제출물:** 완성한 `week02_practice.py`와 문제 4·5의 실행 결과 화면.
+
+**도전 과제(선택):** 두 병원 전체에서 "환자 나이가 40세 이상인 예약"만 골라, 병원별로 몇 건인지 집계해 보세요. (힌트: `WHERE patient_age >= 40` + `GROUP BY hospital`)
+
+::: {.callout-tip collapse="true"}
+## 실습 정답 예시
+```python
+import sqlite3
+conn = sqlite3.connect("clinic.db"); cur = conn.cursor()
+cur.execute("""CREATE TABLE IF NOT EXISTS appointments(
+ appt_id INTEGER PRIMARY KEY, hospital TEXT, patient_age INTEGER,
+ department TEXT, wait_min INTEGER, source TEXT)""")
+gana = [(1,'가나병원',34,'내과',15,'csv'),
+        (2,'가나병원',52,'정형외과',40,'csv'),
+        (3,'가나병원',28,'내과',10,'csv')]
+cur.executemany("INSERT OR REPLACE INTO appointments VALUES(?,?,?,?,?,?)", gana)
+dara = [{"id":4,"dept":"소아과","age":6,"wait":25},
+        {"id":5,"dept":"내과","age":45}]
+for r in dara:
+    cur.execute("INSERT OR REPLACE INTO appointments VALUES(?,?,?,?,?,?)",
+        (r["id"],'다라병원',r["age"],r["dept"],r.get("wait"),'json'))
+conn.commit()
+for row in cur.execute("""SELECT department, ROUND(AVG(wait_min),1), COUNT(*)
+                          FROM appointments GROUP BY department"""):
+    print(row)
+for row in cur.execute("SELECT appt_id, department FROM appointments WHERE wait_min IS NULL"):
+    print("결측:", row)
+# 도전
+for row in cur.execute("""SELECT hospital, COUNT(*) FROM appointments
+                          WHERE patient_age>=40 GROUP BY hospital"""):
+    print("40+:", row)
+conn.close()
+```
+:::
+

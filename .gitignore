@@ -1,0 +1,11 @@
+# Quarto 빌드 산출물 (Actions가 자동 생성)
+/_book/
+/.quarto/
+/_freeze/
+
+# 실습 중 생성되는 SQLite DB
+*.db
+
+# OS/편집기
+.DS_Store
+Thumbs.db

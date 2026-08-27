@@ -1,0 +1,143 @@
+# 9주차 코딩실습
+
+이번 실습에서는 라벨 체계·샘플·어노테이션을 분리한 표준 라벨링 스키마를 SQLite로 설계하고, 외래 키로 무결성을 지키며, 라벨 분포를 집계합니다. 앞 30분은 예제 코드, 뒤 30분은 학생 실습 과제입니다.
+
+## 예제 코드
+
+주제는 "고객 문의 텍스트의 감정 분류"입니다.
+
+```python
+import sqlite3
+conn = sqlite3.connect("annotation.db"); conn.execute("PRAGMA foreign_keys=ON")
+cur = conn.cursor()
+
+# 1) 라벨 체계(taxonomy) 정의
+cur.execute("DROP TABLE IF EXISTS label_schema")
+cur.execute("""CREATE TABLE label_schema(
+    label_id INTEGER PRIMARY KEY, label_name TEXT UNIQUE, description TEXT)""")
+cur.executemany("INSERT INTO label_schema VALUES (?,?,?)", [
+    (1,"긍정","만족·칭찬·감사 표현"),
+    (2,"부정","불만·항의·실망 표현"),
+    (3,"중립","단순 문의·사실 확인"),
+])
+
+# 2) 라벨 대상 샘플
+cur.execute("DROP TABLE IF EXISTS samples")
+cur.execute("""CREATE TABLE samples(
+    sample_id INTEGER PRIMARY KEY, content TEXT, data_type TEXT)""")
+cur.executemany("INSERT INTO samples VALUES (?,?,?)", [
+    (1,"배송이 정말 빨라서 감동했어요","text"),
+    (2,"환불 절차가 너무 복잡합니다","text"),
+    (3,"영업시간이 어떻게 되나요?","text"),
+    (4,"포장이 꼼꼼해서 좋았습니다","text"),
+])
+
+# 3) 어노테이션: 외래키로 정의된 라벨만 허용
+cur.execute("DROP TABLE IF EXISTS annotations")
+cur.execute("""CREATE TABLE annotations(
+    anno_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sample_id INTEGER, label_id INTEGER, annotator TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY(sample_id) REFERENCES samples(sample_id),
+    FOREIGN KEY(label_id)  REFERENCES label_schema(label_id))""")
+work = [(1,1,"김라벨"),(2,2,"김라벨"),(3,3,"김라벨"),(4,1,"김라벨")]
+cur.executemany("INSERT INTO annotations(sample_id,label_id,annotator) VALUES(?,?,?)", work)
+conn.commit()
+
+# 4) 라벨이 붙은 결과를 사람이 읽기 좋게 JOIN
+print("== 라벨링 결과 ==")
+for content, label in cur.execute("""
+    SELECT s.content, l.label_name
+    FROM annotations a
+    JOIN samples s ON a.sample_id = s.sample_id
+    JOIN label_schema l ON a.label_id = l.label_id
+    ORDER BY s.sample_id"""):
+    print(f"  [{label}] {content}")
+
+# 5) 라벨 분포(클래스 균형 점검의 맛보기 — 12주차 연결)
+print("\n== 라벨 분포 ==")
+for label, cnt in cur.execute("""
+    SELECT l.label_name, COUNT(*) FROM annotations a
+    JOIN label_schema l ON a.label_id=l.label_id GROUP BY l.label_name"""):
+    print(f"  {label}: {cnt}건")
+
+# 6) 정의되지 않은 라벨(99) 삽입 시도 → 외래키가 거부
+try:
+    cur.execute("INSERT INTO annotations(sample_id,label_id,annotator) VALUES(1,99,'김라벨')")
+    conn.commit()
+except sqlite3.IntegrityError as e:
+    print("\n거부됨(정의 안 된 라벨):", e)
+conn.close()
+```
+
+라벨 체계·샘플·어노테이션을 분리하고, 외래 키로 무결성을 지키며(6번에서 라벨 99 거부), `JOIN`으로 사람이 읽기 좋게 복원하는 흐름을 확인합니다.
+
+## 코드 문제
+
+주제는 "뉴스 기사의 주제 분류"입니다.
+
+```python
+import sqlite3
+conn = sqlite3.connect("news_anno.db"); conn.execute("PRAGMA foreign_keys=ON")
+cur = conn.cursor()
+
+# [문제 1] label_schema 테이블을 만들고 4개 주제를 넣으세요.
+#   컬럼: label_id(PK), label_name(UNIQUE), description
+#   데이터: (1,'정치','...'),(2,'경제','...'),(3,'스포츠','...'),(4,'IT','...')
+
+# [문제 2] samples 테이블을 만들고 아래 기사 5건을 넣으세요.
+#   컬럼: sample_id(PK), content, data_type('text')
+#   1:"국회 예산안 통과"  2:"코스피 사상 최고치"  3:"손흥민 결승골"
+#   4:"새 스마트폰 공개"  5:"금리 인상 결정"
+
+# [문제 3] annotations 테이블을 외래키(sample_id, label_id)와 함께 만드세요.
+#   컬럼: anno_id(PK AUTOINCREMENT), sample_id, label_id, annotator,
+#         created_at DEFAULT(datetime('now'))
+
+# [문제 4] 작업자 '이기자'가 5건에 라벨을 붙이세요.
+#   1→정치, 2→경제, 3→스포츠, 4→IT, 5→경제
+
+# [문제 5] JOIN으로 [주제] 기사내용 형태로 출력하고,
+#          주제별 기사 수를 GROUP BY로 집계하세요.
+
+conn.close()
+```
+
+**제출물:** `week09_practice.py`와 문제 5의 실행 결과.
+
+**도전 과제(선택):** 정의되지 않은 라벨 `label_id=9`를 삽입해 보고, 외래 키가 이를 거부하는지 `try/except`로 확인해 출력하세요.
+
+::: {.callout-tip collapse="true"}
+## 실습 정답 예시
+```python
+import sqlite3
+conn=sqlite3.connect("news_anno.db"); conn.execute("PRAGMA foreign_keys=ON"); cur=conn.cursor()
+cur.execute("DROP TABLE IF EXISTS label_schema")
+cur.execute("CREATE TABLE label_schema(label_id INTEGER PRIMARY KEY, label_name TEXT UNIQUE, description TEXT)")
+cur.executemany("INSERT INTO label_schema VALUES(?,?,?)",
+    [(1,'정치','정부·국회'),(2,'경제','시장·금융'),(3,'스포츠','경기·선수'),(4,'IT','기술·제품')])
+cur.execute("DROP TABLE IF EXISTS samples")
+cur.execute("CREATE TABLE samples(sample_id INTEGER PRIMARY KEY, content TEXT, data_type TEXT)")
+cur.executemany("INSERT INTO samples VALUES(?,?,?)",
+    [(1,"국회 예산안 통과","text"),(2,"코스피 사상 최고치","text"),
+     (3,"손흥민 결승골","text"),(4,"새 스마트폰 공개","text"),(5,"금리 인상 결정","text")])
+cur.execute("DROP TABLE IF EXISTS annotations")
+cur.execute("""CREATE TABLE annotations(anno_id INTEGER PRIMARY KEY AUTOINCREMENT,
+ sample_id INTEGER, label_id INTEGER, annotator TEXT, created_at TEXT DEFAULT(datetime('now')),
+ FOREIGN KEY(sample_id) REFERENCES samples(sample_id),
+ FOREIGN KEY(label_id) REFERENCES label_schema(label_id))""")
+cur.executemany("INSERT INTO annotations(sample_id,label_id,annotator) VALUES(?,?,?)",
+    [(1,1,"이기자"),(2,2,"이기자"),(3,3,"이기자"),(4,4,"이기자"),(5,2,"이기자")])
+conn.commit()
+for content,label in cur.execute("""SELECT s.content, l.label_name FROM annotations a
+ JOIN samples s ON a.sample_id=s.sample_id JOIN label_schema l ON a.label_id=l.label_id"""):
+    print(f"[{label}] {content}")
+for row in cur.execute("""SELECT l.label_name, COUNT(*) FROM annotations a
+ JOIN label_schema l ON a.label_id=l.label_id GROUP BY l.label_name"""): print(row)
+try:
+    cur.execute("INSERT INTO annotations(sample_id,label_id,annotator) VALUES(1,9,'이기자')"); conn.commit()
+except sqlite3.IntegrityError as e: print("거부:", e)
+conn.close()
+```
+:::
+

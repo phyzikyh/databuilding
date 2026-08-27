@@ -1,0 +1,116 @@
+# 4주차 코딩실습
+
+이번 실습에서는 스테이징에서 프로덕션으로 데이터를 업서트하며, 멱등성·팩트/디멘션·인덱스를 직접 구현합니다. 앞 30분은 예제 코드, 뒤 30분은 학생 실습 과제입니다.
+
+## 예제 코드
+
+주제는 "쇼핑몰 회원·주문 데이터의 팩트/디멘션 적재"입니다.
+
+```python
+import sqlite3
+conn = sqlite3.connect("mall.db"); cur = conn.cursor()
+
+# 1) 디멘션 테이블(회원)
+cur.execute("""CREATE TABLE IF NOT EXISTS dim_member(
+    member_id INTEGER PRIMARY KEY, name TEXT, region TEXT)""")
+members = [(1,"김하늘","서울"),(2,"이바다","부산"),(3,"박소나","대구")]
+cur.executemany("""INSERT INTO dim_member VALUES(?,?,?)
+    ON CONFLICT(member_id) DO UPDATE SET name=excluded.name,
+        region=excluded.region""", members)
+
+# 2) 팩트 테이블(주문) — member_id로 디멘션 참조
+cur.execute("""CREATE TABLE IF NOT EXISTS fact_order(
+    order_id INTEGER PRIMARY KEY, member_id INTEGER,
+    amount INTEGER, order_date TEXT)""")
+orders = [(5001,1,30000,"2026-03-01"),(5002,2,15000,"2026-03-01"),
+          (5003,1,42000,"2026-03-02"),(5001,1,33000,"2026-03-01")]  # 5001 수정본
+cur.executemany("""INSERT INTO fact_order VALUES(?,?,?,?)
+    ON CONFLICT(order_id) DO UPDATE SET amount=excluded.amount""", orders)
+conn.commit()
+
+# 3) JOIN으로 지역별 매출 집계
+print("== 지역별 매출 ==")
+for region, total in cur.execute("""
+    SELECT d.region, SUM(f.amount) AS total
+    FROM fact_order f JOIN dim_member d ON f.member_id = d.member_id
+    GROUP BY d.region ORDER BY total DESC"""):
+    print(f"  {region}: {total:,}원")
+
+# 4) 인덱스 생성(주문일 기준 조회 가속)
+cur.execute("CREATE INDEX IF NOT EXISTS idx_order_date ON fact_order(order_date)")
+
+# 5) 멱등성 확인 — 같은 적재를 한 번 더
+cur.executemany("""INSERT INTO fact_order VALUES(?,?,?,?)
+    ON CONFLICT(order_id) DO UPDATE SET amount=excluded.amount""", orders)
+conn.commit()
+print("재실행 후 주문 건수:", cur.execute("SELECT COUNT(*) FROM fact_order").fetchone()[0])
+conn.close()
+```
+
+`ON CONFLICT(order_id) DO UPDATE`가 업서트를 구현합니다. `excluded`는 "새로 넣으려던 값"을 가리키는 SQLite의 특별한 이름입니다. 5001 주문은 수정본(33,000원)이 반영되고, 재실행해도 건수가 3건 그대로임을 확인합니다.
+
+## 코드 문제
+
+주제는 "학원 수강 신청 데이터"입니다.
+
+```python
+import sqlite3
+conn = sqlite3.connect("academy.db"); cur = conn.cursor()
+
+# [문제 1] 디멘션 테이블 dim_course 생성 및 적재(업서트)
+#   컬럼: course_id(정수,기본키), title(문자), subject(문자)
+#   데이터: (1,"기초수학","수학"),(2,"파이썬입문","IT"),(3,"영어회화","어학")
+
+# [문제 2] 팩트 테이블 fact_enroll 생성 및 적재(업서트)
+#   컬럼: enroll_id(정수,기본키), course_id(정수), student(문자), fee(정수)
+#   데이터: (100,1,"김영수",120000),(101,2,"이지은",150000),
+#           (102,1,"박철수",120000),(100,1,"김영수",130000)  # 100 수정본
+
+# [문제 3] JOIN으로 과목(subject)별 총 수강료와 신청 건수를 구하세요.
+#   힌트: fact_enroll JOIN dim_course ON course_id, GROUP BY subject
+
+# [문제 4] fact_enroll(course_id)에 인덱스를 생성하세요.
+
+# [문제 5] 업서트를 한 번 더 실행한 뒤 총 신청 건수를 출력하여
+#          멱등성을 확인하세요(3건이어야 정상).
+
+conn.close()
+```
+
+**제출물:** `week04_practice.py`와 문제 3·5의 실행 결과.
+
+**도전 과제(선택):** 수강료(fee)가 가장 높은 신청 1건을, 학생 이름·과목명과 함께 출력해 보세요. (힌트: `JOIN` + `ORDER BY fee DESC LIMIT 1`)
+
+::: {.callout-tip collapse="true"}
+## 실습 정답 예시
+```python
+import sqlite3
+conn=sqlite3.connect("academy.db"); cur=conn.cursor()
+cur.execute("""CREATE TABLE IF NOT EXISTS dim_course(
+ course_id INTEGER PRIMARY KEY, title TEXT, subject TEXT)""")
+cur.executemany("""INSERT INTO dim_course VALUES(?,?,?)
+ ON CONFLICT(course_id) DO UPDATE SET title=excluded.title,
+   subject=excluded.subject""",
+ [(1,"기초수학","수학"),(2,"파이썬입문","IT"),(3,"영어회화","어학")])
+cur.execute("""CREATE TABLE IF NOT EXISTS fact_enroll(
+ enroll_id INTEGER PRIMARY KEY, course_id INTEGER, student TEXT, fee INTEGER)""")
+enr=[(100,1,"김영수",120000),(101,2,"이지은",150000),
+     (102,1,"박철수",120000),(100,1,"김영수",130000)]
+cur.executemany("""INSERT INTO fact_enroll VALUES(?,?,?,?)
+ ON CONFLICT(enroll_id) DO UPDATE SET fee=excluded.fee""", enr)
+conn.commit()
+for row in cur.execute("""SELECT c.subject, SUM(e.fee), COUNT(*)
+ FROM fact_enroll e JOIN dim_course c ON e.course_id=c.course_id
+ GROUP BY c.subject"""): print(row)
+cur.execute("CREATE INDEX IF NOT EXISTS idx_enroll_course ON fact_enroll(course_id)")
+cur.executemany("""INSERT INTO fact_enroll VALUES(?,?,?,?)
+ ON CONFLICT(enroll_id) DO UPDATE SET fee=excluded.fee""", enr); conn.commit()
+print("건수:", cur.execute("SELECT COUNT(*) FROM fact_enroll").fetchone()[0])
+# 도전
+print(cur.execute("""SELECT e.student, c.title, e.fee
+ FROM fact_enroll e JOIN dim_course c ON e.course_id=c.course_id
+ ORDER BY e.fee DESC LIMIT 1""").fetchone())
+conn.close()
+```
+:::
+

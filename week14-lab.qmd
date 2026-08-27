@@ -1,0 +1,150 @@
+# 14주차 코딩실습
+
+이번 실습에서는 SQLite에서 준비된 데이터를 꺼내 scikit-learn으로 베이스라인 모델을 학습·예측하고, 정확도·정밀도·재현율·F1과 혼동 행렬로 평가한 뒤, 예측 결과를 다시 SQLite에 저장합니다. `pip install scikit-learn`이 필요합니다.
+
+## 예제 코드
+
+주제는 "고객 이탈(churn) 예측"입니다.
+
+```python
+import sqlite3
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
+
+conn = sqlite3.connect("model.db"); cur = conn.cursor()
+
+# 0) 13주차 산출물 형태의 준비된 데이터(모두 숫자)
+cur.execute("DROP TABLE IF EXISTS model_input")
+cur.execute("""CREATE TABLE model_input(
+    cid INTEGER PRIMARY KEY, is_seoul INT, is_busan INT,
+    age_scaled REAL, unit_price REAL, churn INT, split TEXT)""")
+data = [
+    (1,1,0,0.10, 10000,0,'train'),(2,0,1,0.85, 15000,1,'train'),
+    (3,1,0,0.40, 10000,0,'train'),(4,0,0,1.00,  9000,1,'train'),
+    (5,0,1,0.20, 10000,0,'train'),(6,1,0,0.90, 12500,1,'train'),
+    (7,1,0,0.30,  9500,0,'train'),(8,0,1,0.95, 14000,1,'train'),
+    (9,1,0,0.15, 11000,0,'test'), (10,0,1,0.88,13000,1,'test'),
+    (11,1,0,0.50,10500,0,'test'), (12,0,0,0.92, 8000,1,'test'),
+]
+cur.executemany("INSERT INTO model_input VALUES (?,?,?,?,?,?,?)", data)
+conn.commit()
+
+# 1) SQL로 학습/평가 데이터 꺼내기
+FEATURES = ["is_seoul","is_busan","age_scaled","unit_price"]
+def load(split):
+    q = f"SELECT {','.join(FEATURES)}, churn FROM model_input WHERE split=?"
+    rows = cur.execute(q, (split,)).fetchall()
+    X = [r[:-1] for r in rows]; y = [r[-1] for r in rows]
+    return X, y
+X_train, y_train = load('train')
+X_test,  y_test  = load('test')
+
+# 2) 베이스라인 모델 학습(로지스틱 회귀)
+model = LogisticRegression()
+model.fit(X_train, y_train)
+
+# 3) 예측
+y_pred = model.predict(X_test)
+print("실제:", y_test)
+print("예측:", list(y_pred))
+
+# 4) 성능 평가
+print("\n== 성능 지표 ==")
+print("정확도:", round(accuracy_score(y_test, y_pred), 3))
+print("정밀도:", round(precision_score(y_test, y_pred, zero_division=0), 3))
+print("재현율:", round(recall_score(y_test, y_pred, zero_division=0), 3))
+print("F1점수:", round(f1_score(y_test, y_pred, zero_division=0), 3))
+print("혼동행렬:\n", confusion_matrix(y_test, y_pred))
+
+# 5) 예측 결과를 SQLite에 저장(파이프라인 마무리)
+cur.execute("DROP TABLE IF EXISTS predictions")
+cur.execute("""CREATE TABLE predictions(
+    cid INTEGER, actual INT, predicted INT, correct INT)""")
+test_ids = [r[0] for r in cur.execute("SELECT cid FROM model_input WHERE split='test' ORDER BY cid")]
+for cid, a, p in zip(test_ids, y_test, y_pred):
+    cur.execute("INSERT INTO predictions VALUES (?,?,?,?)", (cid, a, int(p), int(a == p)))
+conn.commit()
+
+# 6) 저장된 예측으로 SQL 집계
+correct = cur.execute("SELECT SUM(correct), COUNT(*) FROM predictions").fetchone()
+print(f"\nSQLite 저장 결과: {correct[0]}/{correct[1]} 정답")
+conn.close()
+```
+
+SQL로 데이터를 꺼내(1), 모델을 학습하고(2), 예측하고(3), 성능을 평가하고(4), 결과를 다시 SQLite에 저장하는(5~6) 완결된 흐름을 확인합니다.
+
+## 코드 문제
+
+주제는 "학생 합격 예측"입니다.
+
+```python
+import sqlite3
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+
+conn = sqlite3.connect("pass_model.db"); cur = conn.cursor()
+cur.execute("DROP TABLE IF EXISTS model_input")
+cur.execute("""CREATE TABLE model_input(
+    sid INTEGER PRIMARY KEY, is_science INT, is_liberal INT,
+    hours_scaled REAL, avg_score REAL, passed INT, split TEXT)""")
+data = [
+    (1,1,0,0.8,80,1,'train'),(2,0,1,0.2,50,0,'train'),
+    (3,1,0,0.6,62,1,'train'),(4,0,0,0.0,42,0,'train'),
+    (5,0,1,1.0,88,1,'train'),(6,1,0,0.4,55,0,'train'),
+    (7,1,0,0.7,70,1,'train'),(8,0,1,0.1,48,0,'train'),
+    (9,1,0,0.9,85,1,'test'), (10,0,1,0.3,52,0,'test'),
+    (11,0,0,0.5,60,1,'test'),(12,1,0,0.2,45,0,'test'),
+]
+cur.executemany("INSERT INTO model_input VALUES (?,?,?,?,?,?,?)", data)
+conn.commit()
+
+# [문제 1] FEATURES=['is_science','is_liberal','hours_scaled','avg_score']로
+#          split='train'/'test' 데이터를 SQL로 꺼내는 load(split) 함수를 작성하세요.
+
+# [문제 2] DecisionTreeClassifier를 train으로 학습(fit)하세요.
+
+# [문제 3] test로 예측(predict)하고, 실제와 예측을 나란히 출력하세요.
+
+# [문제 4] 정확도·정밀도·재현율·F1과 혼동행렬을 출력하세요.(zero_division=0)
+
+# [문제 5] 예측 결과를 predictions 테이블(sid, actual, predicted, correct)에 저장하고,
+#          SQL로 맞힌 개수(SUM(correct))를 출력하세요.
+
+conn.close()
+```
+
+**제출물:** `week14_practice.py`와 문제 3·4·5의 실행 결과, 그리고 "정확도 외에 재현율을 함께 봐야 하는 이유"에 대한 2~3문장 소견.
+
+**도전 과제(선택):** `LogisticRegression`으로도 학습해 두 모델의 정확도를 비교해 보세요. 어느 쪽이 이 데이터에 더 맞나요? (단, 데이터가 작아 결과는 참고용입니다.)
+
+::: {.callout-tip collapse="true"}
+## 실습 정답 예시
+```python
+import sqlite3
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+conn=sqlite3.connect("pass_model.db"); cur=conn.cursor()
+F=['is_science','is_liberal','hours_scaled','avg_score']
+def load(split):
+    rows=cur.execute(f"SELECT {','.join(F)}, passed FROM model_input WHERE split=?",(split,)).fetchall()
+    return [r[:-1] for r in rows], [r[-1] for r in rows]
+Xtr,ytr=load('train'); Xte,yte=load('test')
+m=DecisionTreeClassifier(random_state=0).fit(Xtr,ytr)
+yp=list(m.predict(Xte))
+print("실제:",yte); print("예측:",yp)
+print("정확도",round(accuracy_score(yte,yp),3))
+print("정밀도",round(precision_score(yte,yp,zero_division=0),3))
+print("재현율",round(recall_score(yte,yp,zero_division=0),3))
+print("F1",round(f1_score(yte,yp,zero_division=0),3))
+print(confusion_matrix(yte,yp))
+cur.execute("DROP TABLE IF EXISTS predictions")
+cur.execute("CREATE TABLE predictions(sid INT, actual INT, predicted INT, correct INT)")
+ids=[r[0] for r in cur.execute("SELECT sid FROM model_input WHERE split='test' ORDER BY sid")]
+for sid,a,p in zip(ids,yte,yp):
+    cur.execute("INSERT INTO predictions VALUES(?,?,?,?)",(sid,a,int(p),int(a==p)))
+conn.commit()
+print("정답수:", cur.execute("SELECT SUM(correct),COUNT(*) FROM predictions").fetchone())
+conn.close()
+```
+:::
+

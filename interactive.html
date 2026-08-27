@@ -1,0 +1,23 @@
+<script>
+// 인터랙티브 퀴즈: 선택지(①②③④ 문단)를 클릭하면 정답/오답 표시.
+// 정답은 마크업의 .quiz-answer 로 식별(화면상으로는 숨김).
+document.addEventListener('DOMContentLoaded', function () {
+  var scope = document.querySelector('#quarto-document-content')
+           || document.querySelector('main')
+           || document.body;
+  if (!scope) return;
+  var ps = scope.querySelectorAll('p');
+  Array.prototype.forEach.call(ps, function (p) {
+    var t = (p.textContent || '').trim();
+    if (/^[①②③④]/.test(t)) {          // ① ② ③ ④ 로 시작
+      p.classList.add('quiz-opt');
+      p.setAttribute('role', 'button');
+      p.addEventListener('click', function () {
+        var correct = p.querySelector('.quiz-answer') !== null;
+        p.classList.remove('is-correct', 'is-wrong');
+        p.classList.add(correct ? 'is-correct' : 'is-wrong');
+      });
+    }
+  });
+});
+</script>

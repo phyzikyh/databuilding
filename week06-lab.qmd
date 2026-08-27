@@ -1,0 +1,116 @@
+# 6주차 코딩실습
+
+이번 실습에서는 원본(스테이징)을 보존한 채, 중복 제거·표준화·타입 변환·결측 대치를 한 번의 `CREATE TABLE AS SELECT`로 수행합니다. 앞 30분은 예제 코드, 뒤 30분은 학생 실습 과제입니다.
+
+## 예제 코드
+
+주제는 "온라인 쇼핑 회원 가입 데이터"입니다.
+
+```python
+import sqlite3
+conn = sqlite3.connect("member.db"); cur = conn.cursor()
+cur.execute("DROP TABLE IF EXISTS stg_member")
+cur.execute("""CREATE TABLE stg_member(
+    uid INTEGER, name TEXT, grade TEXT, point TEXT, region TEXT)""")
+raw = [
+    (1,"김하늘","vip","1500"," 서울"),
+    (2,"이바다","VIP","2000","서울 "),
+    (3,"박소나","일반","","부산"),        # point 빈문자
+    (4,"최산들","Normal",None,"부산"),    # point 결측 + 표기 Normal
+    (1,"김하늘","vip","1500"," 서울"),     # 중복
+]
+cur.executemany("INSERT INTO stg_member VALUES (?,?,?,?,?)", raw)
+conn.commit()
+
+# 정제: 중복제거 + 등급표준화 + 공백정리 + 타입변환 + 결측대치(0)
+cur.execute("DROP TABLE IF EXISTS clean_member")
+cur.execute("""
+CREATE TABLE clean_member AS
+SELECT DISTINCT
+    uid, name,
+    CASE WHEN LOWER(grade) LIKE 'vip' THEN 'VIP' ELSE '일반' END AS grade,
+    COALESCE(CAST(NULLIF(TRIM(point),'') AS INTEGER), 0) AS point,
+    TRIM(region) AS region
+FROM stg_member
+""")
+conn.commit()
+
+print("== 정제 결과 ==")
+for r in cur.execute("SELECT * FROM clean_member ORDER BY uid"): print(" ", r)
+print("\n등급 종류:", [r[0] for r in cur.execute("SELECT DISTINCT grade FROM clean_member")])
+print("지역 종류:", [r[0] for r in cur.execute("SELECT DISTINCT region FROM clean_member")])
+print("행수:", cur.execute("SELECT COUNT(*) FROM clean_member").fetchone()[0])
+conn.close()
+```
+
+`DISTINCT`가 중복을, `LOWER(grade) LIKE 'vip'`가 등급 표기를, `TRIM`이 공백을, `COALESCE(CAST(NULLIF(...)))`가 빈 문자열과 결측을 모두 0으로 정리합니다. 원본 `stg_member`는 손대지 않으므로 언제든 다시 정제할 수 있습니다.
+
+## 코드 문제
+
+주제는 "카페 리뷰 데이터"입니다.
+
+```python
+import sqlite3
+conn = sqlite3.connect("review.db"); cur = conn.cursor()
+cur.execute("DROP TABLE IF EXISTS stg_review")
+cur.execute("""CREATE TABLE stg_review(
+    rid INTEGER, cafe TEXT, sentiment TEXT, star TEXT, visitor TEXT)""")
+raw = [
+    (1," 스타빈스 ","긍정","5","김손님"),
+    (2,"스타빈스","POSITIVE","4","이손님 "),
+    (3,"블루보틀 ","부정","","박손님"),        # star 빈문자
+    (4," 블루보틀","negative",None,"최손님"),  # star 결측 + 표기 negative
+    (1," 스타빈스 ","긍정","5","김손님"),        # 중복
+]
+cur.executemany("INSERT INTO stg_review VALUES (?,?,?,?,?)", raw)
+conn.commit()
+
+# [문제 1] clean_review 테이블을 CREATE TABLE AS SELECT로 만드세요. 요구사항:
+#   (a) DISTINCT로 중복 제거
+#   (b) cafe와 visitor의 앞뒤 공백을 TRIM으로 제거
+#   (c) sentiment를 CASE로 표준화:
+#        LOWER(sentiment)가 '긍정' 또는 'positive'이면 '긍정', 그 외 '부정'
+#   (d) star를 정수로 변환하되 빈문자/결측은 0으로 대치
+#        힌트: COALESCE(CAST(NULLIF(TRIM(star),'') AS INTEGER), 0)
+
+# [문제 2] 정제 결과 전체를 출력하세요.
+
+# [문제 3] 정제 후 cafe 종류(DISTINCT)를 출력하세요.(2개여야 정상)
+
+# [문제 4] sentiment별 리뷰 개수를 GROUP BY로 집계하세요.
+
+# [문제 5] UPDATE로 star가 0인 행을, 전체 평균 별점(0 제외)으로 대치하세요.
+#   힌트: 먼저 SELECT로 대상 확인 → UPDATE ... WHERE star=0
+
+conn.close()
+```
+
+**제출물:** `week06_practice.py`와 문제 2·3·4의 실행 결과.
+
+**도전 과제(선택):** 카페별 평균 별점을 구하되, 0점(원래 결측이었던 값)은 제외하고 계산해 보세요. (힌트: `WHERE star>0` + `GROUP BY cafe`)
+
+::: {.callout-tip collapse="true"}
+## 실습 정답 예시
+```python
+import sqlite3
+conn=sqlite3.connect("review.db"); cur=conn.cursor()
+cur.execute("DROP TABLE IF EXISTS clean_review")
+cur.execute("""CREATE TABLE clean_review AS
+SELECT DISTINCT rid, TRIM(cafe) AS cafe,
+  CASE WHEN LOWER(sentiment) IN ('긍정','positive') THEN '긍정' ELSE '부정' END AS sentiment,
+  COALESCE(CAST(NULLIF(TRIM(star),'') AS INTEGER),0) AS star,
+  TRIM(visitor) AS visitor
+FROM stg_review""")
+conn.commit()
+for r in cur.execute("SELECT * FROM clean_review ORDER BY rid"): print(r)
+print("cafe:", [r[0] for r in cur.execute("SELECT DISTINCT cafe FROM clean_review")])
+for r in cur.execute("SELECT sentiment, COUNT(*) FROM clean_review GROUP BY sentiment"): print(r)
+avg=cur.execute("SELECT ROUND(AVG(star)) FROM clean_review WHERE star>0").fetchone()[0]
+cur.execute("UPDATE clean_review SET star=? WHERE star=0",(avg,)); conn.commit()
+# 도전
+for r in cur.execute("SELECT cafe, ROUND(AVG(star),2) FROM clean_review WHERE star>0 GROUP BY cafe"):
+    print("도전:", r)
+conn.close()
+```
+:::
+

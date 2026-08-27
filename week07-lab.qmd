@@ -1,0 +1,121 @@
+# 7주차 코딩실습
+
+이번 실습에서는 제약 조건으로 나쁜 데이터를 막고, "문제 행을 세는 쿼리"를 모은 검증 프레임워크를 구현합니다. 앞 30분은 예제 코드, 뒤 30분은 학생 실습 과제입니다.
+
+## 예제 코드
+
+주제는 "쇼핑몰 상품 등록"입니다. 제약 조건이 잘못된 삽입을 어떻게 거부하는지 확인합니다.
+
+```python
+import sqlite3
+conn = sqlite3.connect("catalog.db"); cur = conn.cursor()
+cur.execute("DROP TABLE IF EXISTS products")
+cur.execute("""CREATE TABLE products(
+    pid INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    price INTEGER CHECK(price >= 0),
+    stock INTEGER CHECK(stock >= 0),
+    category TEXT CHECK(category IN ('식품','의류','전자'))
+)""")
+
+candidates = [
+    (1,"사과",3000,50,"식품"),
+    (2,"티셔츠",-1,10,"의류"),     # price 음수 → 거부
+    (3,None,5000,5,"전자"),        # name 결측 → 거부
+    (4,"노트북",1200000,3,"가전"), # category 허용값 아님 → 거부
+    (5,"바나나",4000,0,"식품"),
+]
+inserted = 0
+for row in candidates:
+    try:
+        cur.execute("INSERT INTO products VALUES (?,?,?,?,?)", row); conn.commit()
+        inserted += 1
+    except sqlite3.IntegrityError as e:
+        print(f"거부 {row[0]}: {e}")
+print(f"\n삽입 성공 {inserted}건")
+
+# 검증 프레임워크: (이름, 문제행 세는 SQL, 임계치, 심각도)
+tests = [
+    ("이름 결측", "SELECT COUNT(*) FROM products WHERE name IS NULL", 0, "치명"),
+    ("가격 음수", "SELECT COUNT(*) FROM products WHERE price < 0", 0, "치명"),
+    ("재고 0 상품", "SELECT COUNT(*) FROM products WHERE stock = 0", 0, "경고"),
+]
+for name, sql, th, sev in tests:
+    c = cur.execute(sql).fetchone()[0]
+    print(f"[{'통과' if c<=th else '실패-'+sev}] {name}: {c}건")
+conn.close()
+```
+
+제약 조건이 규칙을 어긴 삽입을 `IntegrityError`로 거부하고, 검증 프레임워크가 "문제 행 개수"로 통과·실패를 판정하는 흐름을 확인합니다. 새 규칙은 `tests` 리스트에 한 줄만 추가하면 됩니다.
+
+## 코드 문제
+
+주제는 "병원 환자 등록"입니다.
+
+```python
+import sqlite3
+conn = sqlite3.connect("hospital.db"); cur = conn.cursor()
+
+# [문제 1] patients 테이블을 제약 조건과 함께 만드세요.
+#   pid INTEGER PRIMARY KEY
+#   name TEXT NOT NULL
+#   age INTEGER CHECK(age BETWEEN 0 AND 120)
+#   blood TEXT CHECK(blood IN ('A','B','O','AB'))
+#   phone TEXT UNIQUE
+
+# [문제 2] 아래 후보들을 반복 삽입하되, 제약 위반은 try/except로 잡아
+#          어떤 행이 왜 거부되는지 출력하세요.
+candidates = [
+    (1,"김환자",30,"A","010-1111"),
+    (2,"이환자",130,"B","010-2222"),   # age 범위 위반
+    (3,None,25,"O","010-3333"),        # name 결측
+    (4,"박환자",40,"C","010-4444"),    # blood 허용값 아님
+    (5,"최환자",50,"AB","010-1111"),   # phone 중복
+]
+# TODO: for row in candidates: try: ... except sqlite3.IntegrityError as e: ...
+
+# [문제 3] 검증 테스트 3개를 리스트로 정의하고 실행하세요.
+#   (a) 이름 결측 개수 = 0 (치명)
+#   (b) 나이 범위 위반 개수 = 0 (치명)
+#   (c) 혈액형이 4종 외 값인 개수 = 0 (경고)
+#   각 테스트에 대해 [통과]/[실패-심각도]와 건수를 출력하세요.
+
+conn.close()
+```
+
+**제출물:** `week07_practice.py`와 문제 2·3의 실행 결과.
+
+**도전 과제(선택):** 트리거를 만들어, `age`가 음수인 삽입을 `RAISE(ABORT, ...)`로 막아 보세요. 그리고 음수 나이 삽입을 시도해 트리거가 동작하는지 확인하세요.
+
+::: {.callout-tip collapse="true"}
+## 실습 정답 예시
+```python
+import sqlite3
+conn=sqlite3.connect("hospital.db"); cur=conn.cursor()
+cur.execute("DROP TABLE IF EXISTS patients")
+cur.execute("""CREATE TABLE patients(
+ pid INTEGER PRIMARY KEY, name TEXT NOT NULL,
+ age INTEGER CHECK(age BETWEEN 0 AND 120),
+ blood TEXT CHECK(blood IN ('A','B','O','AB')),
+ phone TEXT UNIQUE)""")
+candidates=[(1,"김환자",30,"A","010-1111"),(2,"이환자",130,"B","010-2222"),
+ (3,None,25,"O","010-3333"),(4,"박환자",40,"C","010-4444"),
+ (5,"최환자",50,"AB","010-1111")]
+for row in candidates:
+    try: cur.execute("INSERT INTO patients VALUES(?,?,?,?,?)",row); conn.commit()
+    except sqlite3.IntegrityError as e: print("거부",row[0],e)
+tests=[("이름결측","SELECT COUNT(*) FROM patients WHERE name IS NULL",0,"치명"),
+ ("나이범위","SELECT COUNT(*) FROM patients WHERE age NOT BETWEEN 0 AND 120",0,"치명"),
+ ("혈액형","SELECT COUNT(*) FROM patients WHERE blood NOT IN('A','B','O','AB')",0,"경고")]
+for n,s,t,sev in tests:
+    c=cur.execute(s).fetchone()[0]
+    print(f"[{'통과' if c<=t else '실패-'+sev}] {n}: {c}")
+# 도전(트리거)
+cur.execute("""CREATE TRIGGER IF NOT EXISTS no_neg_age BEFORE INSERT ON patients
+ WHEN NEW.age<0 BEGIN SELECT RAISE(ABORT,'나이는 음수 불가'); END""")
+try: cur.execute("INSERT INTO patients VALUES(9,'테스트',-3,'A','010-9')")
+except sqlite3.IntegrityError as e: print("트리거 동작:",e)
+conn.close()
+```
+:::
+

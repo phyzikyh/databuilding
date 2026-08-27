@@ -1,0 +1,369 @@
+# 3주차 연습문제
+
+각 문항의 **선택지를 클릭**하면 정답(✓)·오답(✗)이 바로 표시됩니다. 자세한 해설은 아래 접이식 **노트**를 펼쳐 확인하세요.
+
+**1.** 크롤링과 API의 가장 큰 차이는?
+
+① 속도
+
+[② 크롤링은 HTML 화면에서 추출, API는 정돈된 데이터를 정식 수신]{.quiz-answer}
+
+③ 사용하는 언어
+
+④ 차이 없음
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** 크롤링은 HTML 화면에서 추출, API는 정돈된 데이터를 정식 수신
+:::
+
+---
+
+**2.** 데이터를 얻을 때 일반적으로 우선 고려해야 하는 방법은?
+
+① 무조건 크롤링
+
+[② API가 있으면 API 우선]{.quiz-answer}
+
+③ 수동 복사
+
+④ 화면 캡처
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** API가 있으면 API 우선
+:::
+
+---
+
+**3.** 웹 통신의 기본 규칙(프로토콜)은?
+
+① FTP
+
+[② HTTP]{.quiz-answer}
+
+③ SMTP
+
+④ SSH
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** HTTP
+:::
+
+---
+
+**4.** HTTP 상태 코드 200의 의미는?
+
+① 없음
+
+[② 성공]{.quiz-answer}
+
+③ 금지
+
+④ 서버 오류
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** 성공
+:::
+
+---
+
+**5.** 상태 코드 404의 의미는?
+
+① 성공
+
+[② 페이지 없음(Not Found)]{.quiz-answer}
+
+③ 요청 과다
+
+④ 권한 없음
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** 페이지 없음(Not Found)
+:::
+
+---
+
+**6.** 상태 코드 429가 뜻하는 것은?
+
+① 성공
+
+[② 요청을 너무 많이·빨리 보냄]{.quiz-answer}
+
+③ 페이지 없음
+
+④ 로그인 필요
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** 요청을 너무 많이·빨리 보냄
+:::
+
+---
+
+**7.** 크롤링 허용·금지 규칙이 적힌 파일은?
+
+① sitemap.xml
+
+[② robots.txt]{.quiz-answer}
+
+③ config.json
+
+④ index.html
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** robots.txt
+:::
+
+---
+
+**8.** 서버에 부담을 주지 않기 위한 크롤링 예절은?
+
+① 최대한 빠르게 요청
+
+[② 요청 사이에 간격을 둠(rate limiting)]{.quiz-answer}
+
+③ 동시에 1000개 요청
+
+④ 헤더 삭제
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** 요청 사이에 간격을 둠(rate limiting)
+:::
+
+---
+
+**9.** 요청 헤더에서 크롤러의 신원을 밝히는 항목은?
+
+① Cookie
+
+[② User-Agent]{.quiz-answer}
+
+③ Content-Length
+
+④ Cache
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** User-Agent
+:::
+
+---
+
+**10.** HTML을 파싱하기 위해 흔히 쓰는 파이썬 라이브러리는?
+
+① NumPy
+
+[② BeautifulSoup]{.quiz-answer}
+
+③ Matplotlib
+
+④ Pillow
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** BeautifulSoup
+:::
+
+---
+
+**11.** HTML 태그들이 이루는 나무 구조를 부르는 말은?
+
+[① DOM(문서 객체 모델)]{.quiz-answer}
+
+② JSON
+
+③ CSV
+
+④ SQL
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ①.** DOM(문서 객체 모델)
+:::
+
+---
+
+**12.** CSS 선택자 `li.item`이 선택하는 것은?
+
+① id가 item인 태그
+
+[② class가 item인 모든 li 태그]{.quiz-answer}
+
+③ 첫 번째 span
+
+④ 전체 body
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** class가 item인 모든 li 태그
+:::
+
+---
+
+**13.** API가 주로 돌려주는 데이터 형식은?
+
+① 이미지
+
+[② JSON]{.quiz-answer}
+
+③ 실행파일
+
+④ 압축파일
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** JSON
+:::
+
+---
+
+**14.** URL `...?city=seoul&date=today`에서 물음표 뒤 부분을 부르는 말은?
+
+① 호스트
+
+[② 쿼리 문자열(파라미터)]{.quiz-answer}
+
+③ 프로토콜
+
+④ 경로
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** 쿼리 문자열(파라미터)
+:::
+
+---
+
+**15.** 데이터를 "읽어 오는" 가장 기본적인 HTTP 요청 방식은?
+
+① POST
+
+[② GET]{.quiz-answer}
+
+③ DELETE
+
+④ PUT
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** GET
+:::
+
+---
+
+**16.** API 인증 키를 다룰 때 올바른 태도는?
+
+① 코드에 그대로 적어 공개
+
+[② 비밀번호처럼 안전하게 보관]{.quiz-answer}
+
+③ 아무 데나 저장
+
+④ 삭제
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** 비밀번호처럼 안전하게 보관
+:::
+
+---
+
+**17.** API가 데이터를 한 번에 다 주지 않고 나누어 주는 방식은?
+
+① 압축
+
+[② 페이지네이션]{.quiz-answer}
+
+③ 암호화
+
+④ 캐싱
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** 페이지네이션
+:::
+
+---
+
+**18.** 새로 생긴 데이터만 받아오는 수집 방식은?
+
+① 전체 수집
+
+[② 증분 수집(incremental)]{.quiz-answer}
+
+③ 랜덤 수집
+
+④ 역방향 수집
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** 증분 수집(incremental)
+:::
+
+---
+
+**19.** 처음 받은 HTML에는 뼈대만 있고 자바스크립트가 내용을 채우는 페이지는?
+
+① 정적 페이지
+
+[② 동적 페이지]{.quiz-answer}
+
+③ 이미지 페이지
+
+④ 빈 페이지
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** 동적 페이지
+:::
+
+---
+
+**20.** 수업에서 실제 상용 사이트를 무단 크롤링하지 않는 이유로 알맞은 것은?
+
+① 느려서
+
+[② 저작권·이용약관·서버 부하 등 법·윤리 문제 때문]{.quiz-answer}
+
+③ HTML이 어려워서
+
+④ 파이썬이 안 돼서
+
+::: {.callout-note collapse="true"}
+## 노트
+
+**정답 ②.** 저작권·이용약관·서버 부하 등 법·윤리 문제 때문
+:::
+
+## 복습 포인트
+
+- **4~6번**의 상태 코드(200/404/429)는 반드시 외워 둡니다. 수집 코드는 항상 200일 때만 데이터를 처리해야 합니다.
+- **8·9·20번**은 크롤링 예절(속도 조절·신원 표시·법·윤리)을 확인합니다.
+- **11~12번**은 DOM과 CSS 선택자, **14~16번**은 URL 구조·요청 방식·인증 키 관리를 짚습니다.
+- **17~19번**은 대량 수집의 실무 개념(페이지네이션·증분·동적 페이지)입니다.
+

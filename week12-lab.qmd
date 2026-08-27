@@ -1,0 +1,138 @@
+# 12주차 코딩실습
+
+이번 실습에서는 두 작업자의 라벨로 단순 일치율과 코헨의 카파를 계산하고, 클래스 분포와 민감 속성별 비율(편향)을 SQL로 점검합니다. 앞 30분은 예제 코드, 뒤 30분은 학생 실습 과제입니다.
+
+## 예제 코드
+
+주제는 "채용 지원서의 합격 예측용 라벨 데이터"입니다.
+
+```python
+import sqlite3
+conn = sqlite3.connect("verify.db"); cur = conn.cursor()
+
+# 1) 두 작업자가 같은 10건에 '적합/부적합' 라벨을 붙임
+cur.execute("DROP TABLE IF EXISTS dual")
+cur.execute("""CREATE TABLE dual(
+    sid INTEGER PRIMARY KEY, gender TEXT, age INTEGER,
+    labelA TEXT, labelB TEXT)""")
+rows = [
+    (1,"남",28,"적합","적합"),(2,"여",35,"부적합","부적합"),
+    (3,"남",41,"적합","부적합"),(4,"여",29,"적합","적합"),   # 불일치 1
+    (5,"남",52,"부적합","부적합"),(6,"여",33,"적합","적합"),
+    (7,"남",25,"부적합","적합"),(8,"여",47,"부적합","부적합"),# 불일치 2
+    (9,"남",38,"적합","적합"),(10,"여",31,"적합","적합"),
+]
+cur.executemany("INSERT INTO dual VALUES (?,?,?,?,?)", rows)
+conn.commit()
+
+# 2) 단순 일치율
+agree = cur.execute("SELECT COUNT(*) FROM dual WHERE labelA=labelB").fetchone()[0]
+total = cur.execute("SELECT COUNT(*) FROM dual").fetchone()[0]
+Po = agree/total
+print(f"단순 일치율 Po = {agree}/{total} = {Po:.2f}")
+
+# 3) 코헨의 카파 (우연 일치 Pe 제거)
+def kappa(cur):
+    n = cur.execute("SELECT COUNT(*) FROM dual").fetchone()[0]
+    po = cur.execute("SELECT COUNT(*) FROM dual WHERE labelA=labelB").fetchone()[0]/n
+    pe = 0
+    for lab in ["적합","부적합"]:
+        pa = cur.execute("SELECT COUNT(*) FROM dual WHERE labelA=?",(lab,)).fetchone()[0]/n
+        pb = cur.execute("SELECT COUNT(*) FROM dual WHERE labelB=?",(lab,)).fetchone()[0]/n
+        pe += pa*pb          # 각 라벨에서 우연히 둘 다 그 라벨일 확률
+    return (po-pe)/(1-pe)
+k = kappa(cur)
+print(f"코헨의 카파 κ = {k:.3f}  → {'상당~완벽' if k>=0.6 else '보완 필요'}")
+
+# 4) 클래스 균형(labelA 기준)
+print("\n== 클래스 분포(labelA) ==")
+for lab, cnt in cur.execute("SELECT labelA, COUNT(*) FROM dual GROUP BY labelA"):
+    print(f"  {lab}: {cnt}건")
+
+# 5) 성별 편향: 성별에 따라 '적합' 비율이 다른가?
+print("\n== 성별별 적합 비율 ==")
+for g, ratio, cnt in cur.execute("""
+    SELECT gender,
+           ROUND(AVG(CASE WHEN labelA='적합' THEN 1.0 ELSE 0 END),2) AS ratio,
+           COUNT(*) AS cnt
+    FROM dual GROUP BY gender"""):
+    print(f"  {g}: 적합비율 {ratio} (표본 {cnt})")
+conn.close()
+```
+
+`AVG(CASE WHEN 조건 THEN 1.0 ELSE 0 END)`은 "조건을 만족하는 비율"을 구하는 유용한 패턴입니다. 성별별 적합 비율의 차이가 크면 편향을 의심합니다.
+
+## 코드 문제
+
+주제는 "대출 심사 라벨 데이터"입니다.
+
+```python
+import sqlite3
+conn = sqlite3.connect("loan.db"); cur = conn.cursor()
+
+# [문제 1] dual 테이블을 만들고 아래 12건을 넣으세요.
+#   컬럼: sid(PK), region(TEXT), income(INTEGER),
+#         labelA(TEXT '승인/거절'), labelB(TEXT '승인/거절')
+rows = [
+    (1,"수도권",3200,"승인","승인"),(2,"지방",2100,"거절","거절"),
+    (3,"수도권",4500,"승인","승인"),(4,"지방",1800,"거절","승인"),  # 불일치
+    (5,"수도권",2800,"승인","승인"),(6,"지방",2500,"거절","거절"),
+    (7,"수도권",3900,"승인","승인"),(8,"지방",1500,"거절","거절"),
+    (9,"수도권",5000,"승인","승인"),(10,"지방",2200,"승인","거절"), # 불일치
+    (11,"수도권",3100,"승인","승인"),(12,"지방",1900,"거절","거절"),
+]
+
+# [문제 2] 단순 일치율 Po를 계산해 출력하세요.
+
+# [문제 3] 코헨의 카파를 계산해 출력하세요(라벨: '승인','거절').
+#   힌트: 본문 kappa 함수를 dual 테이블에 맞게 재사용
+
+# [문제 4] labelA 기준 클래스 분포(승인/거절 건수)를 GROUP BY로 출력하세요.
+
+# [문제 5] 지역(region)별 '승인' 비율을 AVG(CASE WHEN ...)로 비교 출력하세요.
+#   → 수도권과 지방의 승인 비율 차이를 보고 편향 여부를 판단해 보세요.
+
+conn.close()
+```
+
+**제출물:** `week12_practice.py`와 문제 2·3·4·5의 실행 결과, 그리고 "지역 편향이 있다고 보는가?"에 대한 2~3문장 소견.
+
+**도전 과제(선택):** 소득(income) 구간을 저소득(2000 미만)·중간(2000~3500)·고소득(3500 초과)으로 나누어(`CASE WHEN`), 구간별 승인 비율을 집계해 보세요.
+
+::: {.callout-tip collapse="true"}
+## 실습 정답 예시
+```python
+import sqlite3
+conn=sqlite3.connect("loan.db"); cur=conn.cursor()
+cur.execute("DROP TABLE IF EXISTS dual")
+cur.execute("""CREATE TABLE dual(sid INTEGER PRIMARY KEY, region TEXT, income INTEGER,
+ labelA TEXT, labelB TEXT)""")
+rows=[(1,"수도권",3200,"승인","승인"),(2,"지방",2100,"거절","거절"),
+ (3,"수도권",4500,"승인","승인"),(4,"지방",1800,"거절","승인"),
+ (5,"수도권",2800,"승인","승인"),(6,"지방",2500,"거절","거절"),
+ (7,"수도권",3900,"승인","승인"),(8,"지방",1500,"거절","거절"),
+ (9,"수도권",5000,"승인","승인"),(10,"지방",2200,"승인","거절"),
+ (11,"수도권",3100,"승인","승인"),(12,"지방",1900,"거절","거절")]
+cur.executemany("INSERT INTO dual VALUES(?,?,?,?,?)",rows); conn.commit()
+n=cur.execute("SELECT COUNT(*) FROM dual").fetchone()[0]
+po=cur.execute("SELECT COUNT(*) FROM dual WHERE labelA=labelB").fetchone()[0]/n
+print("Po=",round(po,2))
+pe=0
+for lab in ["승인","거절"]:
+    pa=cur.execute("SELECT COUNT(*) FROM dual WHERE labelA=?",(lab,)).fetchone()[0]/n
+    pb=cur.execute("SELECT COUNT(*) FROM dual WHERE labelB=?",(lab,)).fetchone()[0]/n
+    pe+=pa*pb
+print("kappa=",round((po-pe)/(1-pe),3))
+for r in cur.execute("SELECT labelA,COUNT(*) FROM dual GROUP BY labelA"): print(r)
+for r in cur.execute("""SELECT region,
+ ROUND(AVG(CASE WHEN labelA='승인' THEN 1.0 ELSE 0 END),2), COUNT(*)
+ FROM dual GROUP BY region"""): print("승인비율:",r)
+# 도전
+for r in cur.execute("""SELECT CASE WHEN income<2000 THEN '저소득'
+ WHEN income<=3500 THEN '중간' ELSE '고소득' END AS band,
+ ROUND(AVG(CASE WHEN labelA='승인' THEN 1.0 ELSE 0 END),2)
+ FROM dual GROUP BY band"""): print("소득대별:",r)
+conn.close()
+```
+:::
+
