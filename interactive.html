@@ -1,23 +1,99 @@
 <script>
-// 인터랙티브 퀴즈: 선택지(①②③④ 문단)를 클릭하면 정답/오답 표시.
-// 정답은 마크업의 .quiz-answer 로 식별(화면상으로는 숨김).
+// 인터랙티브 연습문제:
+//  1) 각 문항의 선택지(①②③④)를 체크박스처럼 클릭해 답을 고른다(문항당 하나, 라디오식).
+//  2) 맨 아래 '정답확인' 버튼을 누르면 전체 정답(✓)·내가 고른 오답(✗)이 표시되고
+//     각 문항의 해설(노트)이 펼쳐지며 점수가 요약된다. '다시 풀기'로 초기화.
+//  정답은 마크업의 .quiz-answer 로 식별(채점 전에는 화면에 노출되지 않음).
 document.addEventListener('DOMContentLoaded', function () {
   var scope = document.querySelector('#quarto-document-content')
            || document.querySelector('main')
            || document.body;
   if (!scope) return;
-  var ps = scope.querySelectorAll('p');
-  Array.prototype.forEach.call(ps, function (p) {
-    var t = (p.textContent || '').trim();
-    if (/^[①②③④]/.test(t)) {          // ① ② ③ ④ 로 시작
-      p.classList.add('quiz-opt');
-      p.setAttribute('role', 'button');
-      p.addEventListener('click', function () {
-        var correct = p.querySelector('.quiz-answer') !== null;
-        p.classList.remove('is-correct', 'is-wrong');
-        p.classList.add(correct ? 'is-correct' : 'is-wrong');
-      });
+
+  // 선택지(①②③④로 시작하는 문단) 수집
+  var all = Array.prototype.slice.call(scope.querySelectorAll('p'));
+  var opts = all.filter(function (p) { return /^[①②③④]/.test((p.textContent || '').trim()); });
+  if (!opts.length) return;   // 연습문제 페이지에서만 동작
+
+  scope.classList.add('quiz-active');
+  opts.forEach(function (p) { p.classList.add('quiz-opt'); p.setAttribute('role', 'button'); });
+
+  // ①에서 시작하는 4개 단위로 문항 그룹화하고, 각 그룹 뒤의 해설(.callout-note) 연결
+  var groups = [], cur = null;
+  opts.forEach(function (p) {
+    if (/^①/.test((p.textContent || '').trim())) { cur = { opts: [], note: null }; groups.push(cur); }
+    if (cur) cur.opts.push(p);
+  });
+  groups.forEach(function (g) {
+    var el = g.opts[g.opts.length - 1];
+    for (var i = 0; i < 4 && el; i++) {
+      el = el.nextElementSibling;
+      if (el && el.classList && el.classList.contains('callout-note')) { g.note = el; break; }
     }
+    // 선택(라디오식: 그룹 내 하나만)
+    g.opts.forEach(function (p) {
+      p.addEventListener('click', function () {
+        if (scope.classList.contains('quiz-graded')) return;
+        g.opts.forEach(function (o) { o.classList.remove('selected'); });
+        p.classList.add('selected');
+      });
+    });
+  });
+  if (!groups.length) return;
+
+  function openNote(n, open) {
+    if (!n) return;
+    n.querySelectorAll('.callout-header').forEach(function (h) {
+      h.classList.toggle('collapsed', !open);
+      h.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    n.querySelectorAll('.callout-collapse, .collapse').forEach(function (c) {
+      c.classList.toggle('show', open);
+    });
+  }
+
+  // 정답확인 / 다시 풀기 버튼 + 점수
+  var anchor = groups[groups.length - 1].note || groups[groups.length - 1].opts.slice(-1)[0];
+  var bar = document.createElement('div');
+  bar.className = 'quiz-actions';
+  var btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'quiz-check-btn'; btn.textContent = '정답확인';
+  var reset = document.createElement('button');
+  reset.type = 'button'; reset.className = 'quiz-reset-btn'; reset.textContent = '다시 풀기';
+  reset.style.display = 'none';
+  var score = document.createElement('span');
+  score.className = 'quiz-score';
+  bar.appendChild(btn); bar.appendChild(reset); bar.appendChild(score);
+  anchor.parentNode.insertBefore(bar, anchor.nextSibling);
+
+  var total = groups.length;
+  btn.addEventListener('click', function () {
+    var correctN = 0, answered = 0;
+    groups.forEach(function (g) {
+      var correct = null, sel = null;
+      g.opts.forEach(function (o) {
+        if (o.querySelector('.quiz-answer')) correct = o;
+        if (o.classList.contains('selected')) sel = o;
+      });
+      if (correct) correct.classList.add('is-correct');
+      if (sel) { answered++; if (sel !== correct) sel.classList.add('is-wrong'); else correctN++; }
+      openNote(g.note, true);
+    });
+    scope.classList.add('quiz-graded');
+    score.innerHTML = total + '문항 중 <span class="s-num">' + correctN + '</span>개 정답'
+                    + (answered < total ? ' · 미응답 ' + (total - answered) + '개' : '');
+    btn.style.display = 'none'; reset.style.display = '';
+    bar.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  });
+
+  reset.addEventListener('click', function () {
+    scope.classList.remove('quiz-graded');
+    groups.forEach(function (g) {
+      g.opts.forEach(function (o) { o.classList.remove('is-correct', 'is-wrong', 'selected'); });
+      openNote(g.note, false);
+    });
+    score.textContent = ''; btn.style.display = ''; reset.style.display = 'none';
+    scope.scrollIntoView({ block: 'start', behavior: 'smooth' });
   });
 });
 </script>

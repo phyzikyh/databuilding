@@ -101,32 +101,74 @@ code { font-size: 0.9em; }
   line-height: 2.0;
 }
 
-// 연습문제 정답 선택지 — 문항별 노트와 함께 이미지 예시처럼 강조
-// 학생용: 정답 강조를 숨김(정답 노출 방지). 정답 표시는 클릭 피드백/노트로만.
+// 연습문제 정답 선택지 — 학생용: 정답 강조를 숨김(채점 전 정답 노출 방지).
 .quiz-answer {
   color: inherit;
   font-weight: inherit;
 }
 
-// ── 인터랙티브 퀴즈(선택지 클릭 → 정답/오답 피드백) ──
+// ── 인터랙티브 연습문제(체크박스 선택 → 정답확인 채점) ──
+// 채점 전에는 해설(노트)을 숨긴다(연습문제 페이지에서만).
+.quiz-active:not(.quiz-graded) .callout-note { display: none; }
+
+// 선택지 = 체크박스형 클릭 항목
 .quiz-opt {
+  position: relative;
   cursor: pointer;
   border: 1px solid #e3e7ec;
   border-radius: 9px;
-  padding: 8px 12px;
+  padding: 8px 12px 8px 42px;
   margin: 6px 0;
   transition: background 0.12s, border-color 0.12s;
   user-select: none;
 }
+.quiz-opt::before {
+  content: "";
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  width: 18px; height: 18px; box-sizing: border-box;
+  border: 2px solid #b8c0cb; border-radius: 5px; background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 900; color: #fff; line-height: 1;
+}
 .quiz-opt:hover { background: #f4f7fa; border-color: #cfd6de; }
+
+// 학생이 고른 선택지(파랑 체크)
+.quiz-opt.selected { background: #eef4fb; border-color: #3C6EB4; }
+.quiz-opt.selected::before { content: "✓"; background: #3C6EB4; border-color: #3C6EB4; }
+
+// 채점 후 — 정답(초록 ✓)·내가 고른 오답(빨강 ✗)
+.quiz-graded .quiz-opt { cursor: default; }
 .quiz-opt.is-correct {
   background: #eafaf4; border-color: #1AB18B; color: #0d6e56; font-weight: 700;
 }
-.quiz-opt.is-correct::after { content: " ✓"; color: #1AB18B; font-weight: 900; }
+.quiz-opt.is-correct::before { content: "✓"; background: #1AB18B; border-color: #1AB18B; }
+.quiz-opt.is-correct::after { content: " 정답"; color: #1AB18B; font-weight: 900; font-size: 0.85em; }
 .quiz-opt.is-wrong {
   background: #fdecea; border-color: #E8402E; color: #a5281c;
 }
-.quiz-opt.is-wrong::after { content: " ✗"; color: #E8402E; font-weight: 900; }
+.quiz-opt.is-wrong::before { content: "✗"; background: #E8402E; border-color: #E8402E; }
+.quiz-opt.is-wrong::after { content: " 내가 고른 답"; color: #E8402E; font-weight: 800; font-size: 0.85em; }
+
+// 정답확인 / 다시 풀기 / 점수 바
+.quiz-actions {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin: 1.8rem 0 0.4rem;
+}
+.quiz-check-btn {
+  background: #1AB18B; color: #fff; border: 0; border-radius: 10px;
+  padding: 11px 24px; font-size: 1.02rem; font-weight: 800; cursor: pointer;
+  box-shadow: 0 2px 6px rgba(26, 177, 139, 0.28);
+  transition: background 0.12s, transform 0.05s;
+}
+.quiz-check-btn:hover { background: #149b78; }
+.quiz-check-btn:active { transform: translateY(1px); }
+.quiz-reset-btn {
+  background: #fff; color: #4a4f57; border: 1px solid #cfd6de; border-radius: 10px;
+  padding: 11px 18px; font-weight: 700; cursor: pointer;
+}
+.quiz-reset-btn:hover { background: #f4f7fa; }
+.quiz-score { font-weight: 800; font-size: 1.05rem; color: #16181d; }
+.quiz-score .s-num { color: #1AB18B; }
 
 // 연습문제 사이 구분선과 접이식 노트의 간격
 main.content hr {
