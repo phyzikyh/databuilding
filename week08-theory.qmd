@@ -8,7 +8,7 @@
 
 부품 하나하나를 잘 만드는 것과, 그것들을 매끄럽게 이어 하나의 시스템으로 만드는 것은 다른 능력입니다. 각 단계가 아무리 훌륭해도 그 사이의 연결이 어긋나면 전체가 작동하지 않습니다. 수집 단계의 출력이 적재 단계의 입력과 맞아야 하고, 정제 단계가 만든 데이터를 검증 단계가 점검할 수 있어야 합니다. 이렇게 단계들을 유기적으로 잇는 것이 파이프라인 통합의 핵심입니다.
 
-NIA 가이드라인은 이렇게 획득/수집 → 정제 → 가공 → 학습의 전체 공정을 초기 데이터로 한 바퀴 돌려 보는 것을 **1-Cycle 자가점검**이라 부르며, 구축 초기에 반드시 수행해야 할 필수 절차로 규정합니다 [@nia2026guide]. 전체를 한 번 돌려 보아야, 각 단계가 제대로 맞물리는지, 최종 결과가 목표에 부합하는지를 확인할 수 있기 때문입니다. 우리의 통합 실습이 바로 이 1-Cycle을 축소 재현하는 것입니다.
+NIA 가이드라인은 이렇게 획득/수집 → 정제 → 가공 → 학습의 전체 공정을 초기 데이터로 한 바퀴 돌려 보는 것을 **1-Cycle 자가점검**이라 부르며, 구축 초기에 반드시 수행해야 할 필수 절차로 규정합니다. 전체를 한 번 돌려 보아야, 각 단계가 제대로 맞물리는지, 최종 결과가 목표에 부합하는지를 확인할 수 있기 때문입니다. 우리의 통합 실습이 바로 이 1-Cycle을 축소 재현하는 것입니다.
 
 ## 왜 통합이 중요한가 {#sec-w8t-why}
 
@@ -43,7 +43,7 @@ flowchart TB
 
 ## 각 단계를 함수로 나누기 — 모듈화 {#sec-w8t-modular}
 
-좋은 파이프라인은 각 단계가 독립된 함수로 분리되어 있습니다. 수집은 수집 함수가, 정제는 정제 함수가, 검증은 검증 함수가 담당하는 식입니다. 이렇게 단계를 함수로 나누는 것을 **모듈화(modularization)**라고 합니다. 데이터 파이프라인 교재는 이런 모듈화와 추상화를 유지보수의 핵심 모범 사례로 꼽습니다 [@densmore2021data].
+좋은 파이프라인은 각 단계가 독립된 함수로 분리되어 있습니다. 수집은 수집 함수가, 정제는 정제 함수가, 검증은 검증 함수가 담당하는 식입니다. 이렇게 단계를 함수로 나누는 것을 **모듈화(modularization)**라고 합니다. 데이터 파이프라인 교재는 이런 모듈화와 추상화를 유지보수의 핵심 모범 사례로 꼽습니다.
 
 모듈화에는 여러 이점이 있습니다. 첫째, 한 단계에 문제가 생겨도 그 함수만 고치면 되므로 수정이 쉽습니다. 둘째, 각 함수를 따로 시험할 수 있어 문제를 찾기 쉽습니다. 셋째, 함수를 재사용할 수 있습니다. 정제 함수를 잘 만들어 두면 다른 파이프라인에서도 쓸 수 있습니다. 넷째, 코드가 읽기 쉬워집니다. 전체 흐름이 "수집하고, 적재하고, 정제하고, 검증하고, 적재하고, 보고한다"처럼 함수 호출의 나열로 명확하게 보이기 때문입니다.
 
@@ -63,11 +63,11 @@ flowchart TB
 
 이 리포트는 2주차에서 배운 데이터시트의 축소판입니다. 데이터가 어떻게 만들어졌고 어떤 상태인지를 밝히는 것입니다. 리포트가 있으면 그 데이터를 쓰는 사람이 데이터의 성격과 한계를 이해할 수 있고, 나중에 문제가 생겼을 때 원인을 추적할 수 있습니다. 파이프라인이 데이터를 만들어 내는 공장이라면, 리포트는 그 공장이 발행하는 품질 보증서인 셈입니다. 이 보증서가 있어야 데이터를 넘겨받는 사람이 "이 데이터를 어디까지 믿고 쓸 수 있는가"를 판단할 수 있습니다. 보증서 없이 넘어온 데이터는, 아무리 잘 만들어졌어도 받는 사람이 그 품질을 확인할 길이 없어 불안하게 다룰 수밖에 없습니다.
 
-NIA 가이드라인도 데이터 구축의 마지막에 데이터셋 개요, 구성 내역, 설계기준, 분포 현황, 구축 과정, 검수 내역을 담은 산출물을 제출하도록 요구합니다 [@nia2026guide]. 좋은 데이터 구축은 좋은 데이터를 만드는 것에서 끝나지 않고, 그 데이터를 잘 설명하는 문서까지 갖추는 데까지 나아갑니다. 통합 실습에서 우리는 이 리포트 생성까지 포함해 파이프라인을 완성합니다.
+NIA 가이드라인도 데이터 구축의 마지막에 데이터셋 개요, 구성 내역, 설계기준, 분포 현황, 구축 과정, 검수 내역을 담은 산출물을 제출하도록 요구합니다. 좋은 데이터 구축은 좋은 데이터를 만드는 것에서 끝나지 않고, 그 데이터를 잘 설명하는 문서까지 갖추는 데까지 나아갑니다. 통합 실습에서 우리는 이 리포트 생성까지 포함해 파이프라인을 완성합니다.
 
 ## 오케스트레이션 — 파이프라인을 자동으로 돌리기 {#sec-w8t-orchestration}
 
-우리 실습에서는 파이프라인의 각 함수를 순서대로 직접 호출하지만, 실무에서는 이 실행을 자동화하는 도구를 씁니다. 이런 도구를 **오케스트레이션 도구**라고 하며, 대표적인 것이 아파치 에어플로우(Airflow)입니다 [@densmore2021data]. 오케스트레이션 도구는 지휘자가 오케스트라를 이끌듯, 파이프라인의 여러 작업을 정해진 순서와 시간에 자동으로 실행합니다.
+우리 실습에서는 파이프라인의 각 함수를 순서대로 직접 호출하지만, 실무에서는 이 실행을 자동화하는 도구를 씁니다. 이런 도구를 **오케스트레이션 도구**라고 하며, 대표적인 것이 아파치 에어플로우(Airflow)입니다. 오케스트레이션 도구는 지휘자가 오케스트라를 이끌듯, 파이프라인의 여러 작업을 정해진 순서와 시간에 자동으로 실행합니다.
 
 오케스트레이션 도구는 4주차에서 배운 의존성 관리를 자동으로 해 줍니다. 어떤 작업이 어떤 작업에 의존하는지를 그래프로 표현하고, 그 순서를 지켜 실행합니다. 또한 정해진 시간에 파이프라인을 자동으로 돌리고, 실패하면 재시도하거나 담당자에게 알립니다. 사람이 매일 손으로 파이프라인을 실행할 필요 없이, 도구가 알아서 운영하는 것입니다.
 
@@ -150,29 +150,3 @@ NIA 가이드라인도 데이터 구축의 마지막에 데이터셋 개요, 구
 8주차에서는 1~7주에 만든 부품들을 하나의 파이프라인으로 합주했습니다. 수집 → 스테이징 → 정제 → 검증 → 프로덕션 → 리포트의 여섯 단계를 각각 독립된 함수로 모듈화하고, 검증 실패 시 되돌아가 보정하는 흐름과 멱등한 최종 적재를 구현했습니다. 이 통합 실습은 NIA가 요구하는 1-Cycle 자가점검의 축소판입니다.
 
 통합이 주는 가장 큰 교훈은, 데이터 구축이 개별 기술의 나열이 아니라 하나의 유기적인 시스템이라는 것입니다. 각 단계는 앞뒤 단계와 맞물려야 의미가 있고, 전체가 조화롭게 작동해야 좋은 데이터가 나옵니다. 그리고 그 시스템은 문제가 없기를 바라는 것이 아니라, 문제에 대처할 수 있도록 설계되어야 합니다. 이 시스템적 사고가, 데이터 구축의 앞 절반을 마무리하며 우리가 얻는 가장 값진 안목입니다. 부품을 만드는 것에서 시스템을 설계하는 것으로 한 걸음 올라서는 것, 그것이 이번 주가 우리에게 주는 성장입니다. 지금까지 배운 수집·적재·정제·검증은 데이터를 "준비"하는 일이었습니다. 이제 후반부에서는 그 준비된 데이터에 정답을 붙이고, 그것으로 실제 모델을 만들어 보는 새로운 여정이 시작됩니다. 이 튼튼한 기초 위에서, 후반부의 라벨링과 모델링으로 나아갑니다.
-
-## 참고문헌 {#sec-w8t-refs}
-
-1. Densmore, J. (2021). *Data Pipelines Pocket Reference*. O'Reilly Media.
-2. 한국지능정보사회진흥원(NIA). (2026). *인공지능 학습용 데이터 품질관리 가이드 v4.0 — 제1권*.
-3. 한국지능정보사회진흥원(NIA). (2026). *인공지능 학습용 데이터 구축 가이드 v4.0 — 제2권*.
-4. Moses, B., Gavish, L., & Vorwerck, M. (2022). *Data Quality Fundamentals*. O'Reilly Media.
-5. Reis, J., & Housley, M. (2022). *Fundamentals of Data Engineering*. O'Reilly Media.
-6. Kleppmann, M. (2017). *Designing Data-Intensive Applications*. O'Reilly Media.
-7. Gebru, T., et al. (2021). Datasheets for Datasets. *Communications of the ACM*, 64(12).
-8. Sculley, D., et al. (2015). Hidden Technical Debt in Machine Learning Systems. *NeurIPS*, 28.
-9. Sambasivan, N., et al. (2021). Data Cascades in High-Stakes AI. *ACM CHI*.
-10. Kimball, R., & Ross, M. (2013). *The Data Warehouse Toolkit* (3rd ed.). Wiley.
-11. Apache Software Foundation. *Apache Airflow Documentation*. <https://airflow.apache.org>
-12. Wilson, G., et al. (2017). Good Enough Practices in Scientific Computing. *PLOS Computational Biology*, 13(6).
-13. Sculley, D., et al. (2014). Machine Learning: The High-Interest Credit Card of Technical Debt. *NeurIPS Workshop*.
-14. Ereth, J. (2018). DataOps — Towards a Definition. *LWDA*, 104–112.
-15. Atwal, H. (2020). *Practical DataOps*. Apress.
-16. Polyzotis, N., et al. (2018). Data Lifecycle Challenges in Production Machine Learning. *ACM SIGMOD Record*, 47(2).
-17. Paleyes, A., et al. (2022). Challenges in Deploying Machine Learning. *ACM Computing Surveys*, 55(6).
-18. Foote, K. D. (2018). *A Brief History of Data Pipelines*. Dataversity.
-19. Schelter, S., et al. (2018). Automating Large-Scale Data Quality Verification. *VLDB*, 11(12).
-20. Shankar, S., et al. (2022). Operationalizing Machine Learning: An Interview Study. arXiv:2209.09125.
-21. Martin, R. C. (2008). *Clean Code*. Prentice Hall.
-22. SQLite Consortium. *SQLite Documentation*. <https://www.sqlite.org/docs.html>
-23. Python Software Foundation. *sqlite3 Documentation*. <https://docs.python.org/3/library/sqlite3.html>

@@ -40,9 +40,6 @@ book:
       chapters: [week14-theory.qmd, week14-quiz.qmd, week14-lab.qmd]
     - part: "15주차 · 최종 모델 평가와 데이터셋 완성"
       chapters: [week15-theory.qmd, week15-quiz.qmd, week15-lab.qmd]
-    - references.qmd
-
-bibliography: references.bib
 
 crossref:
   fig-title: "그림"

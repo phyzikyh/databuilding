@@ -8,7 +8,7 @@
 
 이 순서의 특성 때문에, 텍스트와 시계열의 라벨도 "몇 번째 글자부터 몇 번째 글자까지", "몇 시부터 몇 시까지"처럼 **구간(span)**으로 표시하는 경우가 많습니다. 이것이 이번 주의 핵심 개념입니다. 10주차에서 배운 이미지의 바운딩 박스가 2차원 위의 사각형이었다면, 텍스트와 시계열의 구간은 1차원 위의 선분입니다. 원리는 같지만 차원이 하나 줄어든 것입니다.
 
-챗봇, 번역기, 뉴스 요약, 이상 거래 탐지, 심전도 분석은 모두 텍스트·시계열 라벨링의 결과물입니다. NIA 가이드라인도 텍스트 데이터와 음성·시계열 데이터를 인공지능 학습용 데이터의 주요 유형으로 다룹니다 [@nia2026guide]. 이번 주에는 텍스트와 시계열 라벨링의 개념, 구간을 표시하는 방법, 그것을 저장하고 검증하는 스키마를 배우고 SQLite로 구현합니다.
+챗봇, 번역기, 뉴스 요약, 이상 거래 탐지, 심전도 분석은 모두 텍스트·시계열 라벨링의 결과물입니다. NIA 가이드라인도 텍스트 데이터와 음성·시계열 데이터를 인공지능 학습용 데이터의 주요 유형으로 다룹니다. 이번 주에는 텍스트와 시계열 라벨링의 개념, 구간을 표시하는 방법, 그것을 저장하고 검증하는 스키마를 배우고 SQLite로 구현합니다.
 
 ## 텍스트 라벨링의 두 층위 {#sec-w11t-text}
 
@@ -42,7 +42,7 @@ flowchart TB
 
 시계열 라벨링에서 가장 흔한 것은 **이벤트·이상 구간 표시**입니다. "몇 시 몇 분부터 몇 시 몇 분까지 이상이 있었다"를 시간 구간으로 기록합니다. 예를 들어 서버 CPU 사용률이 특정 시간대에 비정상적으로 치솟았다면, 그 구간을 "이상"으로 표시합니다. 심전도에서 부정맥이 나타난 구간, 주가가 급변한 구간을 표시하는 것도 같은 방식입니다.
 
-텍스트의 `(start, end)`가 글자 위치였다면, 시계열의 구간은 **시작 시각과 끝 시각**입니다. 발상은 완전히 동일합니다. "구간에 라벨을 붙인다"는 원리가 텍스트와 시계열을 관통합니다. 이런 시간 구간 라벨은 이상 탐지 모델의 정답이 됩니다 [@moses2022data]. 모델은 이 라벨을 보고 "이런 패턴이 나타나면 이상"이라는 규칙을 배웁니다.
+텍스트의 `(start, end)`가 글자 위치였다면, 시계열의 구간은 **시작 시각과 끝 시각**입니다. 발상은 완전히 동일합니다. "구간에 라벨을 붙인다"는 원리가 텍스트와 시계열을 관통합니다. 이런 시간 구간 라벨은 이상 탐지 모델의 정답이 됩니다. 모델은 이 라벨을 보고 "이런 패턴이 나타나면 이상"이라는 규칙을 배웁니다.
 
 ## 하나의 원리, 세 가지 데이터 {#sec-w11t-unified}
 
@@ -164,29 +164,3 @@ SQL에서는 `BETWEEN` 구문으로 시간 구간 질의를 합니다. "시각�
 11주차에서는 순서가 중요한 데이터인 텍스트와 시계열에 라벨을 붙였습니다. 텍스트 라벨링은 문서 수준(분류)과 구간 수준(NER)으로 나뉘며, 구간은 문자 오프셋 `(start, end)`로 표시합니다. 시계열은 이상·이벤트를 시간 구간 `(start_ts, end_ts)`로 표시합니다. 이미지의 바운딩 박스든, 텍스트의 오프셋이든, 시계열의 시간 구간이든 "구간에 라벨을 붙인다"는 원리는 하나입니다.
 
 SQLite에서는 이를 문서·유형·구간 테이블로 저장하고, 오프셋 정합성 검증과 구간 질의(`BETWEEN`)로 라벨의 정확성을 지킵니다. `CHECK(end > start)` 같은 제약으로 잘못된 구간을 막고, 저장한 오프셋이 실제 글자와 맞는지 확인합니다. 텍스트와 시계열 라벨링에도 경계 사례에 대한 가이드라인과 전문성이 필요합니다. 이 통일된 원리를 이해하면, 어떤 순서 데이터를 만나도 그것에 라벨을 붙이는 방법을 스스로 설계할 수 있습니다. 이미지의 사각형 구간, 텍스트의 글자 구간, 시계열의 시간 구간, 음성의 소리 구간이 모두 하나의 발상에서 나온 형제들임을 알면, 라벨링이라는 넓은 세계가 하나의 지도 위에 정돈됩니다. 데이터의 종류에 압도되지 않고, 그 뒤에 흐르는 공통의 원리를 붙잡는 것, 그것이 이번 주가 전하는 가장 값진 배움입니다.
-
-## 참고문헌 {#sec-w11t-refs}
-
-1. 한국지능정보사회진흥원(NIA). (2026). *인공지능 학습용 데이터 구축 가이드 v4.0 — 제2권*.
-2. Pustejovsky, J., & Stubbs, A. (2012). *Natural Language Annotation for Machine Learning*. O'Reilly Media.
-3. Tjong Kim Sang, E. F., & De Meulder, F. (2003). Introduction to the CoNLL-2003 Shared Task: NER. *CoNLL*.
-4. Nadeau, D., & Sekine, S. (2007). A Survey of Named Entity Recognition and Classification. *Lingvisticae Investigationes*, 30(1).
-5. Pang, B., & Lee, L. (2008). Opinion Mining and Sentiment Analysis. *Foundations and Trends in IR*, 2(1–2).
-6. Socher, R., et al. (2013). Recursive Deep Models for Semantic Compositionality. *EMNLP*.
-7. Ratinov, L., & Roth, D. (2009). Design Challenges and Misconceptions in NER. *CoNLL*.
-8. Stubbs, A. (2011). MAE and MAI: Lightweight Annotation Tools. *ACL Linguistic Annotation Workshop*.
-9. Nakov, P., et al. (2016). SemEval-2016 Task 4: Sentiment Analysis in Twitter. *SemEval*.
-10. Moses, B., Gavish, L., & Vorwerck, M. (2022). *Data Quality Fundamentals*. O'Reilly Media.
-11. Chandola, V., Banerjee, A., & Kumar, V. (2009). Anomaly Detection: A Survey. *ACM Computing Surveys*, 41(3).
-12. Blázquez-García, A., et al. (2021). A Review on Outlier/Anomaly Detection in Time Series. *ACM Computing Surveys*, 54(3).
-13. Keogh, E., et al. (2005). HOT SAX: Finding the Most Unusual Time Series Subsequence. *IEEE ICDM*.
-14. Esling, P., & Agon, C. (2012). Time-Series Data Mining. *ACM Computing Surveys*, 45(1).
-15. Lai, K.-H., et al. (2021). Revisiting Time Series Outlier Detection. *NeurIPS Datasets and Benchmarks*.
-16. Klie, J.-C., et al. (2018). INCEpTION: A Flexible Semantic Annotation Platform. *COLING*.
-17. Stenetorp, P., et al. (2012). BRAT: A Web-Based Tool for NLP-Assisted Text Annotation. *EACL*.
-18. Devlin, J., et al. (2019). BERT: Pre-training of Deep Bidirectional Transformers. *NAACL*.
-19. Fu, T. (2011). A Review on Time Series Data Mining. *Engineering Applications of AI*, 24(1).
-20. Artstein, R., & Poesio, M. (2008). Inter-Coder Agreement for Computational Linguistics. *Computational Linguistics*, 34(4).
-21. Aroyo, L., & Welty, C. (2015). Truth Is a Lie. *AI Magazine*, 36(1).
-22. Hripcsak, G., & Rothschild, A. S. (2005). Agreement, the F-Measure, and Reliability. *JAMIA*, 12(3).
-23. SQLite Consortium. *Date and Time Functions*. <https://www.sqlite.org/lang_datefunc.html>

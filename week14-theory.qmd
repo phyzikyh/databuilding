@@ -4,7 +4,7 @@
 
 지난 13주 동안 우리는 데이터를 수집하고, 정제하고, 검증하고, 라벨링하고, 모델이 먹기 좋게 손질했습니다. 이번 주에는 그 데이터로 실제 모델을 학습시켜 봅니다. 이 과목의 목표는 정교한 모델을 만드는 것이 아니라 좋은 데이터를 만드는 것이었음을 기억하세요. 그래서 우리가 만들 모델은 가장 단순한 **베이스라인 모델(baseline model)**입니다.
 
-베이스라인 모델이란 "이보다 못하면 안 된다"는 최소 기준선이 되는 단순한 모델입니다 [@geron2022hands]. 마라톤에 비유하면, 베이스라인은 "일단 완주하는 것"입니다. 기록 단축은 그다음 문제입니다. 베이스라인의 진짜 목적은 우리가 만든 데이터가 학습에 쓸 만한지를 확인하는 것입니다. 데이터가 좋으면 단순한 모델로도 그럴듯한 성능이 나오고, 데이터가 나쁘면 아무리 좋은 모델도 헤맵니다. 즉, 베이스라인 모델링은 데이터 품질의 최종 시험입니다. 이 시험을 통해 우리는 그동안의 데이터 구축이 제대로 되었는지를 처음으로 객관적인 숫자로 확인하게 됩니다. 지금까지는 "이 데이터가 좋을 것"이라는 기대였다면, 이제는 실제 성능이라는 증거로 그것을 검증하는 것입니다. 그래서 이번 주는 한 학기 동안 쌓아 온 노력의 결과를 마주하는 중요한 순간입니다.
+베이스라인 모델이란 "이보다 못하면 안 된다"는 최소 기준선이 되는 단순한 모델입니다. 마라톤에 비유하면, 베이스라인은 "일단 완주하는 것"입니다. 기록 단축은 그다음 문제입니다. 베이스라인의 진짜 목적은 우리가 만든 데이터가 학습에 쓸 만한지를 확인하는 것입니다. 데이터가 좋으면 단순한 모델로도 그럴듯한 성능이 나오고, 데이터가 나쁘면 아무리 좋은 모델도 헤맵니다. 즉, 베이스라인 모델링은 데이터 품질의 최종 시험입니다. 이 시험을 통해 우리는 그동안의 데이터 구축이 제대로 되었는지를 처음으로 객관적인 숫자로 확인하게 됩니다. 지금까지는 "이 데이터가 좋을 것"이라는 기대였다면, 이제는 실제 성능이라는 증거로 그것을 검증하는 것입니다. 그래서 이번 주는 한 학기 동안 쌓아 온 노력의 결과를 마주하는 중요한 순간입니다.
 
 이번 주에 우리는 SQLite에 저장된 데이터를 꺼내, scikit-learn이라는 도구로 모델을 학습하고, 그 성능을 평가하고, 결과를 다시 SQLite에 저장합니다. SQLite가 데이터 저장소, scikit-learn이 모델 도구입니다. 이 전체 흐름을 통해, 우리가 13주 동안 공들여 만든 데이터가 실제로 어떻게 모델이 되는지를 눈으로 확인합니다.
 
@@ -84,7 +84,7 @@ model.fit(X_train, y_train)
 
 ## 네 가지 성능 지표 {#sec-w14t-metrics}
 
-혼동 행렬의 네 값으로 네 가지 지표를 계산합니다 [@geron2022hands].
+혼동 행렬의 네 값으로 네 가지 지표를 계산합니다.
 
 | 지표 | 의미 | 공식 |
 |---|---|---|
@@ -140,14 +140,14 @@ F1 점수는 이 둘의 균형을 하나의 숫자로 나타냅니다. 정밀도
 
 성능 지표가 나왔다면, 그것을 해석하는 안목이 필요합니다. 몇 가지 전형적인 상황과 그 해석을 살펴보겠습니다.
 
-정확도가 높은데 재현율이 낮다면, 모델이 다수 클래스만 잘 맞히고 소수 클래스(중요한 위험)를 놓치고 있는 것입니다. 12주차의 불균형을 의심하고, 13주차의 오버샘플링을 검토합니다. 학습 데이터에선 완벽한데 평가에선 나쁘다면, 모델이 학습 데이터를 통째로 외운 **과적합(overfitting)**입니다 [@geron2022hands]. 이는 모델이 일반적인 규칙을 배운 것이 아니라 학습 데이터의 세부까지 암기해, 새 데이터에 대응하지 못하는 상태입니다.
+정확도가 높은데 재현율이 낮다면, 모델이 다수 클래스만 잘 맞히고 소수 클래스(중요한 위험)를 놓치고 있는 것입니다. 12주차의 불균형을 의심하고, 13주차의 오버샘플링을 검토합니다. 학습 데이터에선 완벽한데 평가에선 나쁘다면, 모델이 학습 데이터를 통째로 외운 **과적합(overfitting)**입니다. 이는 모델이 일반적인 규칙을 배운 것이 아니라 학습 데이터의 세부까지 암기해, 새 데이터에 대응하지 못하는 상태입니다.
 
 두 지표가 모두 낮고 학습과 평가 성능이 비슷하게 나쁘다면, 이는 과소적합이거나 데이터에 배울 만한 패턴이 부족한 경우입니다. 이때는 더 유용한 특성을 만들거나(13주차), 더 많은 데이터를 모으는 것이 도움이 됩니다. 이처럼 성능 지표의 조합을 읽으면, 지금 무엇이 문제이고 무엇을 개선해야 하는지에 대한 단서를 얻을 수 있습니다. 성능 평가는 끝이 아니라, 다음 개선을 위한 진단입니다.
 
 베이스라인 성능이 형편없다면, 모델을 탓하기 전에 데이터를 의심합니다. 라벨이 잘못됐거나(9·12주차), 특성이 부실하거나(13주차), 데이터가 편향됐을(12주차) 수 있습니다. 이 마지막 태도가 이 과목의 핵심 메시지입니다.
 
 ::: {.keybox}
-[모델의 성능은 데이터의 거울입니다.]{.imp} 성능이 낮으면 모델을 복잡하게 만들기 전에, 데이터 구축 과정으로 돌아가 무엇이 잘못됐는지 점검하는 것이 데이터 중심 인공지능(data-centric AI)의 자세입니다 [@sambasivan2021everyone].
+[모델의 성능은 데이터의 거울입니다.]{.imp} 성능이 낮으면 모델을 복잡하게 만들기 전에, 데이터 구축 과정으로 돌아가 무엇이 잘못됐는지 점검하는 것이 데이터 중심 인공지능(data-centric AI)의 자세입니다.
 :::
 
 ## 왜 SQLite와 scikit-learn을 함께 쓰는가 {#sec-w14t-why}
@@ -158,7 +158,7 @@ F1 점수는 이 둘의 균형을 하나의 숫자로 나타냅니다. 정밀도
 
 scikit-learn을 쓰는 방식은 놀랄 만큼 단순합니다. 모델을 하나 만들고, 학습셋으로 학습시키고, 평가셋으로 예측한 뒤, 예측과 실제를 비교해 성능을 구합니다. 이 몇 단계가 대부분의 머신러닝 작업의 뼈대입니다. 복잡해 보이는 머신러닝도, 그 핵심 흐름은 "학습하고, 예측하고, 평가한다"는 단순한 절차입니다. 이 흐름을 이해하면, 우리가 만든 데이터를 어떤 모델에도 연결할 수 있습니다.
 
-scikit-learn은 파이썬의 대표적인 머신러닝 도구로, 다양한 모델과 성능 평가 기능을 제공합니다 [@geron2022hands]. 이 과목은 모델의 세부를 깊이 다루지 않지만, 데이터를 모델에 연결하는 이 흐름만은 손으로 익힙니다. 데이터 구축자가 모델링을 직접 하지 않더라도, 자신이 만든 데이터가 어떻게 모델이 되는지를 이해하는 것은 매우 중요합니다. 그래야 좋은 데이터가 무엇인지, 모델을 위해 데이터를 어떻게 준비해야 하는지를 제대로 알 수 있기 때문입니다.
+scikit-learn은 파이썬의 대표적인 머신러닝 도구로, 다양한 모델과 성능 평가 기능을 제공합니다. 이 과목은 모델의 세부를 깊이 다루지 않지만, 데이터를 모델에 연결하는 이 흐름만은 손으로 익힙니다. 데이터 구축자가 모델링을 직접 하지 않더라도, 자신이 만든 데이터가 어떻게 모델이 되는지를 이해하는 것은 매우 중요합니다. 그래야 좋은 데이터가 무엇인지, 모델을 위해 데이터를 어떻게 준비해야 하는지를 제대로 알 수 있기 때문입니다.
 
 ## 과적합과 과소적합 {#sec-w14t-overfit}
 
@@ -231,29 +231,3 @@ scikit-learn은 파이썬의 대표적인 머신러닝 도구로, 다양한 모�
 14주차에서는 우리가 구축한 데이터로 베이스라인 모델을 학습하고 평가했습니다. 베이스라인의 목적은 성능 경쟁이 아니라 데이터가 학습에 쓸 만한지 확인하는 데 있습니다. 분류 성능은 혼동 행렬(TP·TN·FP·FN)에서 나오는 정확도·정밀도·재현율·F1으로 평가하며, 특히 불균형 데이터에서는 정확도만 봐서는 안 됩니다.
 
 정밀도와 재현율은 종종 트레이드오프 관계이므로, 문제의 성격에 맞게 중시할 지표를 고릅니다. 예측 결과는 다시 SQLite에 저장해 성능을 분석하고 활용합니다. 무엇보다 중요한 것은, 성능이 낮으면 모델이 아니라 데이터를 의심하는 태도입니다. 모델의 성능은 데이터의 거울이며, 우리가 13주 동안 만든 좋은 데이터가 이 학습 단계에서 좋은 성능으로 결실을 맺습니다. 그동안 눈에 잘 띄지 않던 수집·정제·라벨링·검증의 모든 노력이, 마침내 모델의 성능이라는 눈에 보이는 결과로 나타나는 것입니다. 그래서 베이스라인 모델링은 단순히 모델을 만드는 것이 아니라, 우리가 걸어온 긴 데이터 구축의 여정을 되돌아보고 그 성과를 확인하는 자리이기도 합니다. 이것이 이 과목이 전하는 데이터 중심의 자세입니다. 화려한 모델에 눈이 팔리기 쉬운 시대에, "내 데이터는 믿을 만한가"를 먼저 묻는 것이야말로 좋은 인공지능을 만드는 지름길입니다.
-
-## 참고문헌 {#sec-w14t-refs}
-
-1. Géron, A. (2022). *Hands-On Machine Learning with Scikit-Learn, Keras, and TensorFlow* (3rd ed.). O'Reilly Media.
-2. Pedregosa, F., et al. (2011). Scikit-learn: Machine Learning in Python. *JMLR*, 12, 2825–2830.
-3. Hastie, T., Tibshirani, R., & Friedman, J. (2009). *The Elements of Statistical Learning* (2nd ed.). Springer.
-4. James, G., et al. (2021). *An Introduction to Statistical Learning* (2nd ed.). Springer.
-5. Powers, D. M. W. (2011). Evaluation: From Precision, Recall and F-Measure to ROC. *Journal of ML Technologies*, 2(1).
-6. Sokolova, M., & Lapalme, G. (2009). A Systematic Analysis of Performance Measures for Classification. *Information Processing & Management*, 45(4).
-7. Saito, T., & Rehmsmeier, M. (2015). The Precision-Recall Plot Is More Informative than ROC on Imbalanced Datasets. *PLOS ONE*, 10(3).
-8. Kohavi, R. (1995). A Study of Cross-Validation and Bootstrap. *IJCAI*.
-9. Dietterich, T. G. (1998). Approximate Statistical Tests for Comparing Classifiers. *Neural Computation*, 10(7).
-10. Ng, A. (2021). *From Model-centric to Data-centric AI*. DeepLearning.AI.
-11. Sambasivan, N., et al. (2021). Data Cascades in High-Stakes AI. *ACM CHI*.
-12. Bishop, C. M. (2006). *Pattern Recognition and Machine Learning*. Springer.
-13. Breiman, L., et al. (1984). *Classification and Regression Trees*. Wadsworth.
-14. Cox, D. R. (1958). The Regression Analysis of Binary Sequences. *JRSS B*, 20(2).
-15. Provost, F., & Fawcett, T. (2013). *Data Science for Business*. O'Reilly Media.
-16. Fawcett, T. (2006). An Introduction to ROC Analysis. *Pattern Recognition Letters*, 27(8).
-17. He, H., & Garcia, E. A. (2009). Learning from Imbalanced Data. *IEEE TKDE*, 21(9).
-18. Kuhn, M., & Johnson, K. (2013). *Applied Predictive Modeling*. Springer.
-19. 한국지능정보사회진흥원(NIA). (2026). *인공지능 학습용 데이터 구축 가이드 v4.0 — 제2권*.
-20. Mitchell, M., et al. (2019). Model Cards for Model Reporting. *ACM FAT\**.
-21. Raschka, S. (2018). Model Evaluation, Model Selection, and Algorithm Selection in ML. arXiv:1811.12808.
-22. Domingos, P. (2012). A Few Useful Things to Know About Machine Learning. *Communications of the ACM*, 55(10).
-23. scikit-learn developers. *Metrics and scoring*. <https://scikit-learn.org/stable/modules/model_evaluation.html>

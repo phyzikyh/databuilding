@@ -4,13 +4,13 @@
 
 5주차 EDA에서 우리는 데이터의 병을 진단했습니다. 결측이 어디에 얼마나 있는지, 이상값은 무엇인지, 형식이 얼마나 들쭉날쭉한지 파악했습니다. 이제 6주차에서는 그 진단서를 손에 들고 치료, 곧 정제를 합니다. 데이터 정제(data cleaning)는 지저분한 원천 데이터를 학습에 쓸 수 있는 깨끗한 데이터로 다듬는 과정입니다.
 
-정제는 데이터 구축에서 가장 손이 많이 가는 단계입니다. 여러 조사에서 데이터 과학자들이 실제 업무 시간의 절반 이상, 많게는 80%까지를 데이터를 찾고 정제하는 데 쓴다고 보고합니다 [@moses2022data]. 이것은 정제가 그만큼 중요하면서도 자동화하기 어렵기 때문입니다. 데이터마다 문제의 종류가 다르고, 같은 문제라도 상황에 따라 처리 방법이 달라지므로, 사람의 판단이 계속 개입해야 합니다. 그래서 정제 능력은 데이터 구축 전문가의 핵심 역량이며, 이 능력의 차이가 최종 데이터의 품질을 크게 갈라놓습니다.
+정제는 데이터 구축에서 가장 손이 많이 가는 단계입니다. 여러 조사에서 데이터 과학자들이 실제 업무 시간의 절반 이상, 많게는 80%까지를 데이터를 찾고 정제하는 데 쓴다고 보고합니다. 이것은 정제가 그만큼 중요하면서도 자동화하기 어렵기 때문입니다. 데이터마다 문제의 종류가 다르고, 같은 문제라도 상황에 따라 처리 방법이 달라지므로, 사람의 판단이 계속 개입해야 합니다. 그래서 정제 능력은 데이터 구축 전문가의 핵심 역량이며, 이 능력의 차이가 최종 데이터의 품질을 크게 갈라놓습니다.
 
 정제를 빨래에 비유하면 이해가 쉽습니다. 세탁 전에 주머니 속 휴지를 꺼내고(이상값 제거), 흰옷과 색옷을 분리하며(형식 통일), 얼룩을 애벌빨래하고(결측 처리), 마지막으로 반듯하게 개는(표준화) 일련의 과정입니다. 순서와 기준이 없으면 옷이 상하듯, 데이터도 원칙 없이 손대면 오히려 망가집니다. 정제는 무작정 데이터를 고치는 것이 아니라, 정해진 기준에 따라 체계적으로 다듬는 일입니다.
 
 ## 정제 가이드라인이 먼저입니다 {#sec-w6t-guideline}
 
-정제에서 가장 흔한 실수는 기준 없이 손대는 것입니다. "이 값은 이상하니까 지우고, 저 값은 애매하니까 바꾸고" 하는 식으로 즉흥적으로 정제하면, 같은 종류의 데이터가 서로 다르게 처리되어 오히려 일관성이 무너집니다. 그래서 NIA 가이드라인은 정제에 앞서 "학습데이터 유형별 정제 가이드라인을 먼저 작성"하도록 규정합니다 [@nia2026guide].
+정제에서 가장 흔한 실수는 기준 없이 손대는 것입니다. "이 값은 이상하니까 지우고, 저 값은 애매하니까 바꾸고" 하는 식으로 즉흥적으로 정제하면, 같은 종류의 데이터가 서로 다르게 처리되어 오히려 일관성이 무너집니다. 그래서 NIA 가이드라인은 정제에 앞서 "학습데이터 유형별 정제 가이드라인을 먼저 작성"하도록 규정합니다.
 
 정제 가이드라인이란 "어떤 문제를 어떻게 처리할지"를 미리 정해 문서로 남긴 규칙서입니다. 예를 들어 "나이 결측은 전체 중앙값으로 대치한다", "지역 표기는 시 단위로 통일한다", "점수 범위를 벗어난 값은 결측으로 처리한다"처럼 각 문제에 대한 처리 방침을 정합니다. 이렇게 규칙을 먼저 세우면, 누가 정제하든 같은 결과가 나오고, 나중에 왜 그렇게 처리했는지 설명할 수 있습니다.
 
@@ -56,7 +56,7 @@ SQL에서는 `CAST` 함수로 형을 바꿉니다. `CAST(값 AS INTEGER)`처럼 
 
 대치에는 여러 방법이 있습니다. 가장 간단한 것은 대표값으로 채우는 것입니다. 숫자 열이라면 평균이나 중앙값으로, 범주 열이라면 최빈값으로 채웁니다. 이상값이 있을 때는 평균보다 중앙값이 안전한데, 5주차에서 배웠듯 중앙값이 이상값에 덜 흔들리기 때문입니다. 조금 더 정교하게는, 비슷한 다른 데이터를 참고해 채우거나, 다른 열의 값으로부터 추정해 채우기도 합니다. SQL에서는 `COALESCE` 함수가 결측을 지정한 대체값으로 바꿔 줍니다.
 
-대치에도 주의할 점이 있습니다. 대치한 값은 실제 값이 아니라 추정한 값이라는 사실을 잊으면 안 됩니다. 결측을 모두 평균으로 채우면 그 열의 분포가 인위적으로 좁아지고, 대치한 값이 실제 패턴을 왜곡할 수 있습니다. 그래서 어떤 값을 대치했는지 표시를 남겨 두는 것이 좋습니다. 어느 쪽이든 결측 처리에 정답은 없으며, 데이터의 목적과 결측의 원인을 함께 고려해 신중히 골라야 합니다 [@moses2022data].
+대치에도 주의할 점이 있습니다. 대치한 값은 실제 값이 아니라 추정한 값이라는 사실을 잊으면 안 됩니다. 결측을 모두 평균으로 채우면 그 열의 분포가 인위적으로 좁아지고, 대치한 값이 실제 패턴을 왜곡할 수 있습니다. 그래서 어떤 값을 대치했는지 표시를 남겨 두는 것이 좋습니다. 어느 쪽이든 결측 처리에 정답은 없으며, 데이터의 목적과 결측의 원인을 함께 고려해 신중히 골라야 합니다.
 
 ## 정제의 여섯째 — 값 표준화와 범주 통합 {#sec-w6t-standardize}
 
@@ -81,7 +81,7 @@ FROM stg_survey;
 
 이것을 **재현 가능한 정제(reproducible cleaning)**라고 합니다. 정제를 "원본을 고치는 행위"가 아니라 "원본으로부터 깨끗한 데이터를 만들어 내는 변환"으로 보는 것입니다. 이렇게 하면 정제 과정 전체가 하나의 반복 가능한 절차가 됩니다. 같은 원본에 같은 정제 규칙을 적용하면 항상 같은 결과가 나오므로, 정제 과정을 검증하고 개선하기 쉽습니다.
 
-만약 원본을 곧바로 고쳐 버리면 어떻게 될까요? 정제 규칙에 실수가 있었다는 것을 나중에 발견해도 되돌릴 수 없습니다. 이미 지운 데이터는 되살릴 수 없고, 이미 바꾼 값은 원래 무엇이었는지 알 수 없습니다. 그래서 "원본은 절대 건드리지 않는다"는 원칙은 데이터 정제의 안전벨트입니다 [@kleppmann2017designing]. SQL에서는 `CREATE TABLE ... AS SELECT` 구문으로 원본을 읽어 정제한 결과를 새 테이블로 만드는 방식으로 이 원칙을 실천합니다.
+만약 원본을 곧바로 고쳐 버리면 어떻게 될까요? 정제 규칙에 실수가 있었다는 것을 나중에 발견해도 되돌릴 수 없습니다. 이미 지운 데이터는 되살릴 수 없고, 이미 바꾼 값은 원래 무엇이었는지 알 수 없습니다. 그래서 "원본은 절대 건드리지 않는다"는 원칙은 데이터 정제의 안전벨트입니다. SQL에서는 `CREATE TABLE ... AS SELECT` 구문으로 원본을 읽어 정제한 결과를 새 테이블로 만드는 방식으로 이 원칙을 실천합니다.
 
 ## UPDATE의 힘과 위험 {#sec-w6t-update}
 
@@ -156,29 +156,3 @@ FROM stg_survey;
 한 가지 경계할 것은 **과도한 정제**입니다. 데이터를 너무 깨끗하게 만들려다 오히려 중요한 정보를 잃을 수 있습니다. 이상값을 모두 지우면 드물지만 중요한 사례가 사라지고, 결측을 모두 대치하면 실제 분포가 왜곡됩니다. 정제의 목표는 "완벽하게 깨끗한 데이터"가 아니라 "목적에 적합한 데이터"입니다. 이는 1주차에서 배운 품질의 정의와 정확히 이어집니다. 무엇을 위해 정제하는지를 잊지 않는 것이, 과도한 정제를 막는 길입니다.
 
 정리하면, 정제는 EDA 진단서를 바탕으로 데이터를 체계적으로 다듬는 과정입니다. 중복 제거, 공백·형식 정리, 타입 변환, 결측 처리, 값 표준화가 대표 작업이며, SQL의 `DISTINCT`·`TRIM`·`CAST`·`COALESCE`·`CASE WHEN`이 각 작업의 도구입니다. 무엇보다 원본을 보존하고 정제 결과를 새 테이블에 담아 언제든 재현할 수 있게 하는 것이 핵심 원칙입니다. 깨끗한 데이터는 그 자체로 목적이 아니라, 신뢰할 수 있는 인공지능을 위한 재료임을 늘 기억해야 합니다.
-
-## 참고문헌 {#sec-w6t-refs}
-
-1. Moses, B., Gavish, L., & Vorwerck, M. (2022). *Data Quality Fundamentals*. O'Reilly Media.
-2. 한국지능정보사회진흥원(NIA). (2026). *인공지능 학습용 데이터 품질관리 가이드 v4.0 — 제1권*.
-3. Rahm, E., & Do, H. H. (2000). Data Cleaning: Problems and Current Approaches. *IEEE Data Engineering Bulletin*, 23(4).
-4. Ilyas, I. F., & Chu, X. (2019). *Data Cleaning*. ACM Books.
-5. Kandel, S., et al. (2011). Wrangler: Interactive Visual Specification of Data Transformation Scripts. *ACM CHI*.
-6. Raman, V., & Hellerstein, J. M. (2001). Potter's Wheel: An Interactive Data Cleaning System. *VLDB*, 381–390.
-7. Chu, X., et al. (2016). Data Cleaning: Overview and Emerging Challenges. *ACM SIGMOD*.
-8. Little, R. J. A., & Rubin, D. B. (2019). *Statistical Analysis with Missing Data* (3rd ed.). Wiley.
-9. van Buuren, S. (2018). *Flexible Imputation of Missing Data* (2nd ed.). CRC Press.
-10. Hellerstein, J. M. (2008). *Quantitative Data Cleaning for Large Databases*. UNECE White Paper.
-11. Krishnan, S., et al. (2016). ActiveClean: Interactive Data Cleaning for Statistical Modeling. *VLDB*, 9(12).
-12. Wickham, H. (2014). Tidy Data. *Journal of Statistical Software*, 59(10).
-13. Dasu, T., & Johnson, T. (2003). *Exploratory Data Mining and Data Cleaning*. Wiley.
-14. Batini, C., & Scannapieco, M. (2016). *Data and Information Quality*. Springer.
-15. Kleppmann, M. (2017). *Designing Data-Intensive Applications*. O'Reilly Media.
-16. Redman, T. C. (2016). *Getting in Front on Data*. Technics Publications.
-17. Osborne, J. W. (2013). *Best Practices in Data Cleaning*. SAGE Publications.
-18. McKinney, W. (2022). *Python for Data Analysis* (3rd ed.). O'Reilly Media.
-19. SQLite Consortium. *Core Functions (TRIM, COALESCE, NULLIF, CAST)*. <https://www.sqlite.org/lang_corefunc.html>
-20. SQLite Consortium. *CREATE TABLE ... AS SELECT*. <https://www.sqlite.org/lang_createtable.html>
-21. Abedjan, Z., et al. (2016). Detecting Data Errors: Where Are We and What Needs to Be Done? *VLDB*, 9(12).
-22. ISO/IEC 25012:2008. *Data quality model*. ISO.
-23. Densmore, J. (2021). *Data Pipelines Pocket Reference*. O'Reilly Media.

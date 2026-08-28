@@ -2,7 +2,7 @@
 
 ## 웹은 거대한 데이터 창고입니다 {#sec-w3t-intro}
 
-2주차에서 외부 데이터 소스를 배웠습니다. 그중에서도 가장 크고 다양한 창고가 바로 **웹(Web)**입니다. 매 순간 뉴스 기사가 올라오고, 상품 정보가 갱신되고, 사람들의 리뷰와 의견이 쌓입니다. 이 방대한 창고에서 데이터를 꺼내는 능력은 데이터 구축자에게 매우 강력한 무기입니다. 이번 주에는 웹에서 데이터를 꺼내는 두 가지 정식 통로인 **웹 크롤링(web crawling)**과 **API(Application Programming Interface)**를 배우고, 꺼낸 데이터를 곧바로 SQLite에 적재하여 수집과 저장을 하나의 흐름으로 잇습니다 [@densmore2021data]. 이 두 방법은 서로 다른 상황에서 빛을 발하므로, 각각의 원리와 장단점을 함께 익혀 두면 어떤 수집 과제를 만나도 당황하지 않고 대처할 수 있습니다.
+2주차에서 외부 데이터 소스를 배웠습니다. 그중에서도 가장 크고 다양한 창고가 바로 **웹(Web)**입니다. 매 순간 뉴스 기사가 올라오고, 상품 정보가 갱신되고, 사람들의 리뷰와 의견이 쌓입니다. 이 방대한 창고에서 데이터를 꺼내는 능력은 데이터 구축자에게 매우 강력한 무기입니다. 이번 주에는 웹에서 데이터를 꺼내는 두 가지 정식 통로인 **웹 크롤링(web crawling)**과 **API(Application Programming Interface)**를 배우고, 꺼낸 데이터를 곧바로 SQLite에 적재하여 수집과 저장을 하나의 흐름으로 잇습니다. 이 두 방법은 서로 다른 상황에서 빛을 발하므로, 각각의 원리와 장단점을 함께 익혀 두면 어떤 수집 과제를 만나도 당황하지 않고 대처할 수 있습니다.
 
 두 방법의 관계를 먼저 그림으로 정리하겠습니다.
 
@@ -83,7 +83,7 @@ API가 크롤링보다 나은 점은 분명합니다. 데이터가 이미 정돈
 
 ## 증분 수집이라는 발상 {#sec-w3t-incremental}
 
-매번 전체 데이터를 처음부터 다시 받는 것은 비효율적입니다. 어제 이미 받은 데이터를 오늘 또 받을 이유가 없기 때문입니다. 그래서 어제 받은 데이터는 그대로 두고 **새로 생긴 것만 받는** 방식을 씁니다. 이를 **증분 수집(incremental extraction)**이라고 합니다 [@densmore2021data].
+매번 전체 데이터를 처음부터 다시 받는 것은 비효율적입니다. 어제 이미 받은 데이터를 오늘 또 받을 이유가 없기 때문입니다. 그래서 어제 받은 데이터는 그대로 두고 **새로 생긴 것만 받는** 방식을 씁니다. 이를 **증분 수집(incremental extraction)**이라고 합니다.
 
 ```{mermaid}
 flowchart LR
@@ -160,29 +160,3 @@ Python에서 웹 요청을 다루는 표준 도구는 `requests` 라이브러리
 정리하면, 웹 수집은 강력하지만 책임이 따르는 기술입니다. HTTP의 요청과 응답을 이해하고, 상태 코드를 확인하며, `robots.txt`·속도 조절·신원 표시라는 예절을 지키고, 크롤링과 API 중 상황에 맞는 방법을 고르는 것이 핵심입니다. 그리고 페이지네이션과 증분 수집으로 대량 데이터를 효율적으로 다루며, 수집한 데이터를 곧바로 SQLite에 적재해 저장소에 쌓습니다.
 
 이번 주에 배운 개념들은 서로 촘촘히 연결되어 있습니다. URL의 구조를 알아야 API 파라미터를 다룰 수 있고, HTTP 상태 코드를 알아야 수집 실패에 대응할 수 있으며, HTML의 구조를 알아야 원하는 데이터를 골라낼 수 있습니다. 그리고 이 모든 것의 바탕에는 "남의 서버와 데이터를 존중한다"는 예절이 깔려 있습니다. 이 "꺼내서 담는" 흐름이 다음 주에 배울 적재 패턴으로 자연스럽게 이어집니다. 수집이 파이프라인의 입구라면, 적재는 그 데이터를 튼튼한 창고에 정리해 넣는 일입니다. 무엇보다 기억할 것은, 아무리 기술이 뛰어나도 남의 서버와 데이터를 존중하는 예의를 잃지 않는 태도입니다. 그 태도가 데이터 구축자를 단순한 기술자가 아니라 신뢰받는 전문가로 만듭니다.
-
-## 참고문헌 {#sec-w3t-refs}
-
-1. Densmore, J. (2021). *Data Pipelines Pocket Reference*. O'Reilly Media.
-2. Mitchell, R. (2018). *Web Scraping with Python* (2nd ed.). O'Reilly Media.
-3. Reis, J., & Housley, M. (2022). *Fundamentals of Data Engineering*. O'Reilly Media.
-4. Fielding, R. T., & Reschke, J. (2014). *Hypertext Transfer Protocol (HTTP/1.1): Semantics and Content*. RFC 7231, IETF.
-5. Richardson, L. (2007–2024). *Beautiful Soup Documentation*. <https://www.crummy.com/software/BeautifulSoup/>
-6. Reitz, K., et al. *Requests: HTTP for Humans Documentation*. <https://requests.readthedocs.io>
-7. Fielding, R. T. (2000). *Architectural Styles and the Design of Network-based Software Architectures* (REST 논문). UC Irvine.
-8. Masse, M. (2011). *REST API Design Rulebook*. O'Reilly Media.
-9. Koster, M. (1994). *A Standard for Robot Exclusion (robots.txt)*.
-10. Thelwall, M., & Stuart, D. (2006). Web Crawling Ethics Revisited. *JASIST*, 57(13).
-11. Olston, C., & Najork, M. (2010). Web Crawling. *Foundations and Trends in Information Retrieval*, 4(3), 175–246.
-12. 한국지능정보사회진흥원(NIA). (2026). *인공지능 학습용 데이터 구축 가이드 v4.0 — 제2권*.
-13. 행정안전부. *공공데이터 포털 Open API 활용 가이드*. <https://www.data.go.kr>
-14. 개인정보보호위원회. (2024). *가명정보 처리 가이드라인*.
-15. Crockford, D. (2006). *The application/json Media Type for JSON*. RFC 4627, IETF.
-16. Bradshaw, S., Brazil, E., & Chodorow, K. (2019). *MongoDB: The Definitive Guide* (3rd ed.). O'Reilly Media.
-17. Common Crawl Foundation. *Common Crawl Documentation*. <https://commoncrawl.org>
-18. Glez-Peña, D., et al. (2014). Web Scraping Technologies in an API World. *Briefings in Bioinformatics*, 15(5), 788–797.
-19. Vargiu, E., & Urru, M. (2013). Exploiting Web Scraping in a Collaborative Filtering-Based Approach. *Artificial Intelligence Research*, 2(1).
-20. Gebru, T., et al. (2021). Datasheets for Datasets. *Communications of the ACM*, 64(12).
-21. SQLite Consortium. *SQLite Documentation*. <https://www.sqlite.org/docs.html>
-22. Python Software Foundation. *sqlite3 — DB-API 2.0 interface*. <https://docs.python.org/3/library/sqlite3.html>
-23. Berners-Lee, T., Fielding, R., & Masinter, L. (2005). *Uniform Resource Identifier (URI): Generic Syntax*. RFC 3986, IETF.
