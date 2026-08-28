@@ -97,3 +97,36 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 </script>
+
+<script>
+// 좌측 사이드바 목록을 주차별 "1. 이론 / 2. 연습문제 / 3. 코딩실습"으로 표시.
+//  - 주차 파트 헤더의 가운뎃점(·)은 콜론(:)으로 바꿈.
+//  - 페이지 본문·그림 번호 등 다른 요소는 건드리지 않고 사이드바 라벨만 변경.
+document.addEventListener('DOMContentLoaded', function () {
+  var map = [
+    { re: /week\d+-theory\.html$/, num: '1.', title: '이론' },
+    { re: /week\d+-quiz\.html$/,   num: '2.', title: '연습문제' },
+    { re: /week\d+-lab\.html$/,    num: '3.', title: '코딩실습' }
+  ];
+  var links = document.querySelectorAll('.sidebar-navigation a.sidebar-link');
+  Array.prototype.forEach.call(links, function (a) {
+    var href = a.getAttribute('href') || '';
+    for (var i = 0; i < map.length; i++) {
+      if (map[i].re.test(href)) {
+        var num = a.querySelector('.chapter-number');
+        var ttl = a.querySelector('.chapter-title');
+        if (num) num.textContent = map[i].num;
+        if (ttl) ttl.textContent = map[i].title;
+        break;
+      }
+    }
+  });
+  // 주차 파트 헤더: "N주차 · 주제" → "N주차 : 주제"
+  var mts = document.querySelectorAll('.sidebar-navigation .menu-text');
+  Array.prototype.forEach.call(mts, function (m) {
+    if (/^\s*\d+주차\s*·/.test(m.textContent)) {
+      m.innerHTML = m.innerHTML.replace('·', ':');
+    }
+  });
+});
+</script>
