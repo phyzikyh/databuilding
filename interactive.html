@@ -121,6 +121,16 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
   });
+  // 서문(홈) 항목의 전역 챕터 번호 숨김
+  Array.prototype.forEach.call(links, function (a) {
+    try {
+      var p = new URL(a.href).pathname;
+      if (/databuilding\/(index\.html)?$/.test(p)) {
+        var num = a.querySelector('.chapter-number');
+        if (num) num.textContent = '';
+      }
+    } catch (e) {}
+  });
   // 주차 파트 헤더: "N주차 · 주제" → "N주차 : 주제"
   var mts = document.querySelectorAll('.sidebar-navigation .menu-text');
   Array.prototype.forEach.call(mts, function (m) {
