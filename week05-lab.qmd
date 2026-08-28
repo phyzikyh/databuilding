@@ -1,112 +1,232 @@
 # 5주차 코딩실습
 
-이번 실습에서는 SQL로 데이터를 프로파일링하여 규모·완전성·요약 통계·분포·이상값을 진단합니다. 앞 30분은 예제 코드, 뒤 30분은 학생 실습 과제입니다. 사분위수 계산에는 파이썬 표준 라이브러리 `statistics`를 사용합니다.
+이번 실습에서는 SQL과 파이썬 `statistics`로 데이터를 프로파일링해 **규모 → 완전성(결측) → 요약 통계 → 유효성(범위) → 이상값(IQR)** 순서로 진단합니다. 먼저 예제 코드로 흐름을 익힌 뒤, **기본 → 응용 → 도전** 순의 문제를 직접 풉니다.
 
-## 예제 코드
+::: {.callout-note}
+## 실습 방법
+VS Code에서 `week05_practice.py` 파일을 만들고, 아래 **데이터 준비** 코드를 먼저 붙여 넣어 실행하세요. 이후 예제와 문제의 코드를 같은 파일에 이어서 작성하면 됩니다. 각 문제 아래 **정답·해설**은 스스로 풀어 본 다음 펼쳐서 확인하세요.
+:::
 
-주제는 "온라인 강의 수강 로그"입니다. 일부러 결측과 이상값을 섞어 두었습니다.
+## 데이터 준비
+
+주제는 "중고차 매물 데이터"입니다. 아래 코드는 **현실적인 매물 120건**을 만들어 `usedcar.db`에 저장합니다. `random.seed(42)` 덕분에 누구나 **같은 데이터**를 얻습니다. 실제 데이터처럼 **결측·이상값**이 섞여 있습니다.
 
 ```python
-import sqlite3, statistics
-conn = sqlite3.connect("lms.db"); cur = conn.cursor()
-cur.execute("DROP TABLE IF EXISTS logs")
-cur.execute("""CREATE TABLE logs(
-    log_id INTEGER PRIMARY KEY, student TEXT, course TEXT,
-    watch_min INTEGER, score INTEGER)""")
-rows = [
-    (1,"A","파이썬",45,80),(2,"B","파이썬",60,None),   # score 결측
-    (3,"C","통계",30,55),(4,"D","통계",None,70),        # watch 결측
-    (5,"E","파이썬",50,95),(6,"F","통계",1200,40),      # watch 이상값
-    (7,"G","AI",40,88),(8,"H","AI",35,150),            # score 이상값(150)
-]
-cur.executemany("INSERT INTO logs VALUES (?,?,?,?,?)", rows)
+import sqlite3, random
+random.seed(42)
+
+conn = sqlite3.connect("usedcar.db"); cur = conn.cursor()
+cur.execute("DROP TABLE IF EXISTS cars")
+cur.execute("""CREATE TABLE cars(
+    car_id  INTEGER PRIMARY KEY,
+    brand   TEXT, model TEXT, year INTEGER,
+    mileage INTEGER,          -- 주행거리(km)
+    fuel    TEXT,
+    price   INTEGER            -- 가격(만원)
+)""")
+
+brands = {                    # 브랜드: (모델목록, 가격 프리미엄 계수)
+    "현대":   (["아반떼","쏘나타","그랜저","투싼"], 1.00),
+    "기아":   (["K5","스포티지","쏘렌토","모닝"],   0.95),
+    "제네시스":(["G70","G80","GV70"],              1.80),
+    "BMW":    (["3시리즈","5시리즈","X3"],          2.20),
+    "벤츠":   (["C클래스","E클래스","GLC"],         2.40),
+    "쉐보레": (["스파크","말리부","트레일블레이저"], 0.80),
+}
+fuels = ["가솔린","디젤","하이브리드","전기"]
+
+rows = []
+for cid in range(1, 121):
+    brand = random.choice(list(brands))
+    models, premium = brands[brand]
+    model = random.choice(models)
+    year  = random.randint(2012, 2024)
+    age   = 2026 - year
+    mileage = max(1000, int(random.gauss(age * 13000, 8000)))
+    base  = 3200 - age * 230                       # 연식이 오래될수록 싸짐
+    price = max(200, int((base + random.gauss(0, 300)) * premium))
+    fuel  = random.choice(fuels)
+    rows.append([cid, brand, model, year, mileage, fuel, price])
+
+# 현실적 결함 주입(결측·이상값) — 특정 매물에 고정
+missing_price   = {17, 58, 93}     # 가격 결측
+missing_mileage = {24, 71}         # 주행거리 결측
+for r in rows:
+    if r[0] in missing_price:   r[6] = None
+    if r[0] in missing_mileage: r[4] = None
+rows[39][3] = 1900                 # car_id 40: 연식 오타(1900)
+rows[11][6] = 99999                # car_id 12: 가격 이상값(9억9천만…)
+
+cur.executemany("INSERT INTO cars VALUES (?,?,?,?,?,?,?)", rows)
 conn.commit()
-
-# 1) 규모와 결측
-print("전체:", cur.execute("SELECT COUNT(*) FROM logs").fetchone()[0])
-for col in ["watch_min","score"]:
-    n = cur.execute(f"SELECT COUNT(*) FROM logs WHERE {col} IS NULL").fetchone()[0]
-    print(f"결측 {col}: {n}")
-
-# 2) 강좌별 평균 시청시간·평균점수 (프로파일링)
-print("\n== 강좌별 요약 ==")
-for c,cnt,w,s in cur.execute("""SELECT course, COUNT(*),
-        ROUND(AVG(watch_min),1), ROUND(AVG(score),1)
-        FROM logs GROUP BY course"""):
-    print(f"  {c}: {cnt}명, 평균시청 {w}분, 평균점수 {s}")
-
-# 3) 유효성: 점수 범위(0~100) 위반 탐지
-print("\n== 점수 이상값 ==")
-for r in cur.execute("SELECT log_id, student, score FROM logs WHERE score>100 OR score<0"):
-    print("  ", r)
-
-# 4) IQR로 시청시간 이상값
-w = [r[0] for r in cur.execute("SELECT watch_min FROM logs WHERE watch_min IS NOT NULL ORDER BY watch_min")]
-q = statistics.quantiles(w, n=4); iqr = q[2]-q[0]
-high = q[2] + 1.5*iqr
-print("\n시청시간 상한:", round(high), "→ 이상값:", [x for x in w if x>high])
+print("적재 완료:", cur.execute("SELECT COUNT(*) FROM cars").fetchone()[0], "건")
 conn.close()
 ```
 
-규모(1) → 완전성(2의 결측) → 요약 통계(2) → 유효성(3) → IQR 이상값(4)의 순서로 진단하는 EDA의 전형적 흐름을 확인합니다. `statistics.quantiles`는 별도 설치 없이 사분위수를 구해 줍니다.
+## 예제 코드
 
-## 코드 문제
-
-주제는 "중고차 매물 데이터"입니다.
+같은 `usedcar.db`를 열어 EDA의 전형적 흐름을 단계별로 살펴봅니다.
 
 ```python
 import sqlite3, statistics
 conn = sqlite3.connect("usedcar.db"); cur = conn.cursor()
-cur.execute("DROP TABLE IF EXISTS cars")
-cur.execute("""CREATE TABLE cars(
-    car_id INTEGER PRIMARY KEY, brand TEXT, year INTEGER,
-    mileage INTEGER, price INTEGER)""")
-rows = [
-    (1,"현대",2019,45000,1500),(2,"기아",2020,30000,1800),
-    (3,"현대",2018,None,1300),(4,"BMW",2021,20000,None),   # 결측 2건
-    (5,"기아",2017,60000,1100),(6,"현대",1800,50000,1400), # year 이상값(1800)
-    (7,"BMW",2022,15000,45000),(8,"기아",2019,40000,1600), # price 이상값(45000)
-]
-cur.executemany("INSERT INTO cars VALUES (?,?,?,?,?)", rows)
-conn.commit()
 
-# [문제 1] 전체 매물 건수를 출력하세요.
+# 1) 규모: 전체 건수와 브랜드 종류 수
+n = cur.execute("SELECT COUNT(*) FROM cars").fetchone()[0]
+b = cur.execute("SELECT COUNT(DISTINCT brand) FROM cars").fetchone()[0]
+print(f"전체 {n}건, 브랜드 {b}종")
 
-# [문제 2] mileage와 price의 결측 개수를 각각 출력하세요.
+# 2) 완전성: 열별 결측 개수
+print("\n== 결측 개수 ==")
+for col in ["mileage", "price"]:
+    m = cur.execute(f"SELECT COUNT(*) FROM cars WHERE {col} IS NULL").fetchone()[0]
+    print(f"  {col}: {m}건")
 
-# [문제 3] 브랜드별 매물 수와 평균 가격을 구하세요.(GROUP BY brand)
+# 3) 요약 통계: 브랜드별 매물 수·평균 가격(결측 자동 제외)
+print("\n== 브랜드별 요약 ==")
+for brand, cnt, avg in cur.execute("""
+        SELECT brand, COUNT(*), ROUND(AVG(price))
+        FROM cars GROUP BY brand ORDER BY AVG(price) DESC"""):
+    print(f"  {brand}: {cnt}건, 평균 {avg}만원")
 
-# [문제 4] 연식(year)이 1980~2026 범위를 벗어난 이상값을 찾아 출력하세요.
+# 4) 유효성: 연식이 상식 범위(2010~2026)를 벗어난 값
+print("\n== 연식 이상값 ==")
+for r in cur.execute("SELECT car_id, brand, year FROM cars WHERE year<2010 OR year>2026"):
+    print("  ", r)
 
-# [문제 5] price의 사분위수를 statistics.quantiles로 구해
-#          IQR 상한을 계산하고, 그 위의 이상값을 출력하세요.
+# 5) 이상값(IQR): 가격 상한을 넘는 매물
+p = [r[0] for r in cur.execute(
+        "SELECT price FROM cars WHERE price IS NOT NULL ORDER BY price")]
+q1, q2, q3 = statistics.quantiles(p, n=4)      # 1·2·3사분위수
+iqr = q3 - q1
+upper = q3 + 1.5 * iqr
+print(f"\n가격 IQR 상한: {round(upper)}만원")
+print("가격 이상값:", [x for x in p if x > upper])
 
 conn.close()
 ```
 
-**제출물:** `week05_practice.py`와 문제 3·4·5의 실행 결과.
+규모(1) → 완전성(2) → 요약 통계(3) → 유효성(4) → IQR 이상값(5)으로 이어지는 흐름을 확인합니다. `AVG`·`COUNT`는 NULL을 자동으로 빼고 계산하며, `statistics.quantiles`는 별도 설치 없이 사분위수를 구해 줍니다.
 
-**도전 과제(선택):** 브랜드별 "결측이 아닌 가격"의 최소·최대·평균을 한 줄에 함께 출력해 보세요. (힌트: `MIN(price), MAX(price), AVG(price)`를 한 SELECT에)
+## 코드 문제
+
+같은 `usedcar.db`를 사용합니다. 아래 문제를 **기본 → 응용 → 도전** 순서로 풀어 보세요.
+
+### 기본 — 개념 그대로 적용하기
+
+**문제 1.** 전체 매물 건수와 **연료(fuel) 종류 수**를 출력하세요.
 
 ::: {.callout-tip collapse="true"}
-## 실습 정답 예시
+## 정답·해설
 ```python
-import sqlite3, statistics
-conn=sqlite3.connect("usedcar.db"); cur=conn.cursor()
-print("전체:", cur.execute("SELECT COUNT(*) FROM cars").fetchone()[0])
-for col in ["mileage","price"]:
-    print(col, cur.execute(f"SELECT COUNT(*) FROM cars WHERE {col} IS NULL").fetchone()[0])
-for row in cur.execute("""SELECT brand, COUNT(*), ROUND(AVG(price),0)
-                          FROM cars GROUP BY brand"""): print(row)
-for row in cur.execute("SELECT car_id, brand, year FROM cars WHERE year<1980 OR year>2026"):
-    print("연식이상:", row)
-p=[r[0] for r in cur.execute("SELECT price FROM cars WHERE price IS NOT NULL ORDER BY price")]
-q=statistics.quantiles(p,n=4); high=q[2]+1.5*(q[2]-q[0])
-print("가격상한:", round(high), "이상값:", [x for x in p if x>high])
-# 도전
-for row in cur.execute("""SELECT brand, MIN(price), MAX(price), ROUND(AVG(price),0)
-     FROM cars WHERE price IS NOT NULL GROUP BY brand"""): print(row)
-conn.close()
+n = cur.execute("SELECT COUNT(*) FROM cars").fetchone()[0]
+f = cur.execute("SELECT COUNT(DISTINCT fuel) FROM cars").fetchone()[0]
+print(f"전체 {n}건, 연료 {f}종")
 ```
+`COUNT(*)`는 전체 행 수, `COUNT(DISTINCT fuel)`은 서로 다른 연료 값의 개수(고유값 개수)를 셉니다.
 :::
 
+**문제 2.** `price`와 `mileage`의 **결측 개수**를 각각 출력하세요.
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for col in ["price", "mileage"]:
+    m = cur.execute(f"SELECT COUNT(*) FROM cars WHERE {col} IS NULL").fetchone()[0]
+    print(f"{col} 결측: {m}건")
+```
+결측은 `= NULL`이 아니라 반드시 `IS NULL`로 판별합니다. (price 3건, mileage 2건이 정상입니다.)
+:::
+
+**문제 3.** **브랜드별** 매물 수와 평균 가격을 구해, 평균 가격이 높은 순으로 출력하세요.
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for row in cur.execute("""
+        SELECT brand, COUNT(*), ROUND(AVG(price))
+        FROM cars GROUP BY brand ORDER BY AVG(price) DESC"""):
+    print(row)
+```
+`GROUP BY brand`로 묶고 `COUNT`·`AVG`로 집계합니다. `ORDER BY AVG(price) DESC`로 비싼 브랜드부터 정렬합니다.
+:::
+
+### 응용 — 조합하고 변형하기
+
+**문제 4.** 연식(`year`)이 **2010~2026 범위를 벗어난** 이상값(유효성 위반)을 찾아 `car_id, brand, year`를 출력하세요.
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for r in cur.execute("""SELECT car_id, brand, year FROM cars
+                        WHERE year < 2010 OR year > 2026"""):
+    print("연식 이상:", r)
+```
+값이 존재하지만 상식 범위를 벗어난 것은 **유효성** 문제입니다. car_id 40의 `1900`이 잡혀야 정상입니다.
+:::
+
+**문제 5.** `price`의 사분위수를 `statistics.quantiles`로 구해 **IQR 상한(Q3 + 1.5×IQR)** 을 계산하고, 그보다 큰 가격 이상값을 출력하세요.
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+import statistics
+p = [r[0] for r in cur.execute(
+        "SELECT price FROM cars WHERE price IS NOT NULL ORDER BY price")]
+q1, q2, q3 = statistics.quantiles(p, n=4)
+upper = q3 + 1.5 * (q3 - q1)
+print("가격 상한:", round(upper), "이상값:", [x for x in p if x > upper])
+```
+결측을 제외하고 정렬한 뒤 사분위수를 구합니다. car_id 12의 `99999`가 이상값으로 잡혀야 정상입니다.
+:::
+
+**문제 6.** **연료(fuel)별** 평균 가격과 평균 주행거리를 함께 구해, 평균 가격이 높은 순으로 출력하세요. (힌트: 한 `SELECT`에 `AVG(price)`와 `AVG(mileage)`를 나란히)
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for row in cur.execute("""
+        SELECT fuel, COUNT(*), ROUND(AVG(price)), ROUND(AVG(mileage))
+        FROM cars GROUP BY fuel ORDER BY AVG(price) DESC"""):
+    print(row)
+```
+한 번의 집계에서 여러 통계(`AVG(price)`, `AVG(mileage)`)를 동시에 뽑을 수 있습니다. 각 `AVG`는 해당 열의 NULL을 알아서 제외합니다.
+:::
+
+### 도전 — 종합하기(선택)
+
+**문제 7.** 지금까지 배운 진단을 묶어 **데이터 품질 리포트**를 한 번에 출력하세요. 포함할 항목:
+
+1. 전체 매물 건수
+2. `price`·`mileage`의 **결측률(%)** — `결측 ÷ 전체 × 100`, 소수 첫째 자리
+3. 연식 범위(2010~2026) 위반 건수
+4. 가격 IQR 상한과 그 위 이상값의 개수
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+import statistics
+total = cur.execute("SELECT COUNT(*) FROM cars").fetchone()[0]
+print("===== 중고차 데이터 품질 리포트 =====")
+print(f"1) 규모: {total}건")
+
+print("2) 결측률:")
+for col in ["price", "mileage"]:
+    miss = cur.execute(f"SELECT COUNT(*) FROM cars WHERE {col} IS NULL").fetchone()[0]
+    print(f"   {col}: {round(miss * 100 / total, 1)}%")
+
+bad_year = cur.execute("""SELECT COUNT(*) FROM cars
+                          WHERE year < 2010 OR year > 2026""").fetchone()[0]
+print(f"3) 연식 범위 위반: {bad_year}건")
+
+p = [r[0] for r in cur.execute(
+        "SELECT price FROM cars WHERE price IS NOT NULL ORDER BY price")]
+q1, q2, q3 = statistics.quantiles(p, n=4)
+upper = q3 + 1.5 * (q3 - q1)
+outliers = [x for x in p if x > upper]
+print(f"4) 가격 상한 {round(upper)}만원 초과: {len(outliers)}건")
+```
+5주차에서 배운 **규모·완전성·유효성·이상값**을 하나의 리포트로 묶었습니다. 이런 요약은 6주차 정제의 '할 일 목록'이 됩니다.
+:::
+
+**제출물:** `week05_practice.py`와 문제 3·5·7의 실행 결과 화면을 제출합니다.
