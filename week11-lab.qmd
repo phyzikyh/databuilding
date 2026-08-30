@@ -118,8 +118,6 @@ conn2 = sqlite3.connect("heart.db"); cur2 = conn2.cursor()
 conn.close(); conn2.close()
 ```
 
-**제출물:** `week11_practice.py`와 문제 2·3·6의 실행 결과.
-
 **도전 과제(선택):** NER 스키마에서, 같은 문서 안에 구간이 겹치는 쌍(`s1.start < s2.end AND s2.start < s1.end`)이 있는지 SQL로 찾아 "구간 중복 오류"를 탐지해 보세요.
 
 ::: {.callout-tip collapse="true"}
@@ -162,4 +160,3 @@ print(f"이상 {a:.0f} vs 정상 {n:.0f}")
 conn2.close()
 ```
 :::
-

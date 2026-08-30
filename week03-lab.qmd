@@ -92,8 +92,6 @@ def fake_api(page):
 conn.close()
 ```
 
-**제출물:** `week03_practice.py`와 문제 4·5의 실행 결과.
-
 **도전 과제(선택):** 장르별 평균 평점을 구하고, 평균 평점이 가장 높은 장르를 찾아 출력해 보세요. (힌트: `GROUP BY genre` + `ORDER BY AVG(rating) DESC LIMIT 1`)
 
 ::: {.callout-tip collapse="true"}
@@ -132,4 +130,3 @@ print(cur.execute("""SELECT genre, ROUND(AVG(rating),2) FROM movies
 conn.close()
 ```
 :::
-

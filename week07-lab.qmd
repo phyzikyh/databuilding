@@ -81,8 +81,6 @@ candidates = [
 conn.close()
 ```
 
-**제출물:** `week07_practice.py`와 문제 2·3의 실행 결과.
-
 **도전 과제(선택):** 트리거를 만들어, `age`가 음수인 삽입을 `RAISE(ABORT, ...)`로 막아 보세요. 그리고 음수 나이 삽입을 시도해 트리거가 동작하는지 확인하세요.
 
 ::: {.callout-tip collapse="true"}
@@ -116,4 +114,3 @@ except sqlite3.IntegrityError as e: print("트리거 동작:",e)
 conn.close()
 ```
 :::
-

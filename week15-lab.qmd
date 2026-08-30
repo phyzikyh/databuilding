@@ -109,8 +109,6 @@ conn.commit()
 conn.close()
 ```
 
-**제출물:** `week15_capstone.py`와 (1) 정제 전후 비교, (2) 교차검증 결과, (3) 데이터셋 리포트를 담은 화면. 팀별로 이 결과를 5분 발표 자료로 정리합니다.
-
 **도전 과제(선택):** 리포트에 "성별에 따른 revisit 비율"(12주차 편향 점검, `AVG(CASE WHEN)`)을 추가하고, 편향 여부에 대한 짧은 소견을 덧붙이세요.
 
 ::: {.callout-tip collapse="true"}
@@ -158,4 +156,3 @@ for r in cur.execute("SELECT revisit,COUNT(*) FROM model_input GROUP BY revisit"
 conn.close()
 ```
 :::
-

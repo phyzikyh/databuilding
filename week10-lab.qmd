@@ -109,8 +109,6 @@ cur = conn.cursor()
 conn.close()
 ```
 
-**제출물:** `week10_practice.py`와 문제 4·5·6의 실행 결과.
-
 **도전 과제(선택):** 범주별 "평균 박스 면적"을 구해, 어떤 동물의 박스가 평균적으로 가장 큰지 출력해 보세요. (힌트: `AVG(w*h)` + `GROUP BY cat`)
 
 ::: {.callout-tip collapse="true"}
@@ -148,4 +146,3 @@ for r in cur.execute("""SELECT c.cat_name, AVG(b.w*b.h) FROM bbox b
 conn.close()
 ```
 :::
-

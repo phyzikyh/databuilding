@@ -111,8 +111,6 @@ conn.commit()
 conn.close()
 ```
 
-**제출물:** `week14_practice.py`와 문제 3·4·5의 실행 결과, 그리고 "정확도 외에 재현율을 함께 봐야 하는 이유"에 대한 2~3문장 소견.
-
 **도전 과제(선택):** `LogisticRegression`으로도 학습해 두 모델의 정확도를 비교해 보세요. 어느 쪽이 이 데이터에 더 맞나요? (단, 데이터가 작아 결과는 참고용입니다.)
 
 ::: {.callout-tip collapse="true"}
@@ -145,4 +143,3 @@ print("정답수:", cur.execute("SELECT SUM(correct),COUNT(*) FROM predictions")
 conn.close()
 ```
 :::
-

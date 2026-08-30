@@ -101,8 +101,6 @@ cur = conn.cursor()
 conn.close()
 ```
 
-**제출물:** `week09_practice.py`와 문제 5의 실행 결과.
-
 **도전 과제(선택):** 정의되지 않은 라벨 `label_id=9`를 삽입해 보고, 외래 키가 이를 거부하는지 `try/except`로 확인해 출력하세요.
 
 ::: {.callout-tip collapse="true"}
@@ -138,4 +136,3 @@ except sqlite3.IntegrityError as e: print("거부:", e)
 conn.close()
 ```
 :::
-

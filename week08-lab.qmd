@@ -144,8 +144,6 @@ def extract():
 # load_production(...); load_production(...)  # 멱등성 확인
 ```
 
-**제출물:** `week08_practice.py`와 (1) 검증 실패→보정→통과 로그, (2) 최종 리포트, (3) 멱등성 확인 결과.
-
 **도전 과제(선택):** `report`에 "정제 전(stg) 대비 프로덕션 행 수 변화"를 함께 출력해, 파이프라인이 몇 건을 걸러 냈는지 보여 주세요.
 
 ::: {.callout-tip collapse="true"}
@@ -187,4 +185,3 @@ load_production(conn); load_production(conn)
 print("건수:", conn.execute("SELECT COUNT(*) FROM enroll").fetchone()[0]); conn.close()
 ```
 :::
-

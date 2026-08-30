@@ -75,8 +75,6 @@ conn = sqlite3.connect("academy.db"); cur = conn.cursor()
 conn.close()
 ```
 
-**제출물:** `week04_practice.py`와 문제 3·5의 실행 결과.
-
 **도전 과제(선택):** 수강료(fee)가 가장 높은 신청 1건을, 학생 이름·과목명과 함께 출력해 보세요. (힌트: `JOIN` + `ORDER BY fee DESC LIMIT 1`)
 
 ::: {.callout-tip collapse="true"}
@@ -111,4 +109,3 @@ print(cur.execute("""SELECT e.student, c.title, e.fee
 conn.close()
 ```
 :::
-
