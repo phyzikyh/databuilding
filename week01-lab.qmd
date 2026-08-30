@@ -56,7 +56,6 @@ conn.close()
 - `cur.execute("SQL")` — SQL 문 한 개를 실행합니다(여기서는 `DROP`, `CREATE`).
 - `cur.executemany("SQL", 목록)` — 같은 SQL을 목록의 여러 행에 반복 실행합니다(여러 건 INSERT).
 - `conn.commit()` — 지금까지의 변경을 파일에 **확정 저장**합니다.
-- `cur.execute(...).fetchone()` — 조회 결과에서 한 행을 가져옵니다. 뒤의 `[0]`으로 그 첫 값을 꺼냅니다.
 - `conn.close()` — 데이터베이스 연결을 닫습니다.
 
 ## 예제 코드
@@ -71,12 +70,11 @@ conn = sqlite3.connect("library.db"); cur = conn.cursor()
 
 rows = cur.execute("SELECT * FROM books").fetchall()   # 모든 열·모든 행
 print("전체 행 수:", len(rows))
-print("첫 3권 미리보기:")
 for r in rows[:3]:
     print("  ", r)
 ```
 
-`SELECT *`는 모든 열을 가져오고, `fetchall()`은 결과 전체를 리스트로 돌려줍니다. 앞 몇 개만 볼 때는 파이썬 슬라이싱 `rows[:3]`을 씁니다.
+`SELECT *`는 모든 열을 가져오고, `fetchall()`은 결과 전체를 리스트로 돌려줍니다.
 
 **이 코드에 쓰인 함수**
 
@@ -85,43 +83,77 @@ for r in rows[:3]:
 - `len(rows)` — (파이썬) 리스트의 길이, 즉 행 개수를 셉니다.
 - `rows[:3]` — (파이썬) 리스트 슬라이싱으로 앞 3개만 잘라 냅니다.
 
-### 예제 2. 한 행만·몇 행만 꺼내기
+### 예제 2. 한 행만 꺼내기
 
 ```python
-first = cur.execute("SELECT * FROM books").fetchone()   # 딱 한 행
+first = cur.execute("SELECT * FROM books").fetchone()
 print("첫 책:", first)
-
-cur.execute("SELECT title FROM books")
-print("앞 5권 제목:", cur.fetchmany(5))                 # 앞에서 5행
 ```
 
-`fetchone()`은 결과에서 한 행만, `fetchmany(n)`은 앞에서 n행만 꺼냅니다. 큰 표에서 일부만 확인할 때 유용합니다.
+`fetchone()`은 결과에서 한 행만 꺼냅니다. 값이 없으면 `None`을 돌려줍니다.
 
 **이 코드에 쓰인 함수**
 
-- `.fetchone()` — 결과에서 **한 행**만 가져옵니다. 더 이상 없으면 `None`을 돌려줍니다.
-- `.fetchmany(5)` — 결과에서 **앞 5행**을 가져옵니다.
+- `.fetchone()` — 조회 결과에서 **한 행**만 가져옵니다.
 
-### 예제 3. 필요한 열만·규모 세기
+### 예제 3. 앞에서 몇 행만 꺼내기
+
+```python
+cur.execute("SELECT title FROM books")
+print("앞 5권 제목:", cur.fetchmany(5))
+```
+
+`fetchmany(n)`은 결과에서 앞 n행만 가져옵니다. 큰 표에서 일부만 확인할 때 유용합니다.
+
+**이 코드에 쓰인 함수**
+
+- `.fetchmany(5)` — 조회 결과에서 **앞 5행**을 가져옵니다.
+
+### 예제 4. 필요한 열만 조회
 
 ```python
 print("제목 · 저자:")
 for title, author in cur.execute("SELECT title, author FROM books").fetchall()[:5]:
     print(f"  {title} / {author}")
-
-n = cur.execute("SELECT COUNT(*) FROM books").fetchone()[0]
-print("전체 권수:", n)
 ```
 
-필요한 열만 적으면(`SELECT title, author`) 결과가 간결해집니다. `COUNT(*)`은 전체 행 수를 세어 하나의 값으로 돌려줍니다.
+모든 열 대신 필요한 열만 적으면(`SELECT title, author`) 결과가 간결해집니다.
 
 **이 코드에 쓰인 함수**
 
 - `SELECT title, author` — 모든 열 대신 **필요한 열만** 골라 조회합니다.
-- `COUNT(*)` — (SQL 함수) 전체 **행 수**를 셉니다.
-- `.fetchone()[0]` — 한 행을 가져와 그 **첫 번째 값**을 꺼냅니다(여기서는 개수).
+- `.fetchall()[:5]` — 전체를 가져온 뒤 앞 5개만 슬라이싱합니다.
 
-### 예제 4. 표 구조 확인하기
+### 예제 5. 전체 규모 세기
+
+```python
+n = cur.execute("SELECT COUNT(*) FROM books").fetchone()[0]
+print("전체 권수:", n)
+```
+
+`COUNT(*)`은 전체 행 수를 세어 하나의 값으로 돌려줍니다.
+
+**이 코드에 쓰인 함수**
+
+- `COUNT(*)` — (SQL 함수) 테이블의 전체 **행 수**를 셉니다.
+- `.fetchone()[0]` — 한 행을 가져와 그 **첫 번째 값**(개수)을 꺼냅니다.
+
+### 예제 6. 꺼낸 결과를 파이썬으로 다루기
+
+```python
+years = [row[0] for row in cur.execute("SELECT year FROM books")]
+print("가장 오래된 책:", min(years), "년")
+print("가장 최신 책:", max(years), "년")
+```
+
+SQL로 꺼낸 결과는 파이썬 리스트로 담아 자유롭게 가공할 수 있습니다. 여기서는 출간연도만 모아 파이썬 `min`·`max`로 가장 오래된·최신 책의 연도를 구합니다.
+
+**이 코드에 쓰인 함수**
+
+- `[row[0] for row in cur.execute(...)]` — (파이썬) 조회 결과의 각 행에서 첫 값을 뽑아 리스트로 만듭니다(리스트 컴프리헨션).
+- `min(years)` / `max(years)` — (파이썬) 리스트에서 가장 작은·큰 값을 구합니다.
+
+### 예제 7. 표 구조 확인하기
 
 ```python
 print("books 표 구조:")
@@ -129,14 +161,14 @@ for col in cur.execute("PRAGMA table_info(books)"):
     print(f"  {col[1]} ({col[2]}), NOT NULL={col[3]}")
 ```
 
-`PRAGMA table_info(테이블)`은 각 열의 이름·자료형·제약을 알려 줍니다. 내가 만든 표가 의도대로 생겼는지 확인할 때 씁니다.
+`PRAGMA table_info(테이블)`은 각 열의 이름·자료형·제약을 알려 줍니다.
 
 **이 코드에 쓰인 함수**
 
 - `PRAGMA table_info(books)` — 표의 **열 정보**(이름·자료형·제약)를 알려 주는 SQLite 전용 명령입니다.
 - `col[1]` / `col[2]` / `col[3]` — 각 열 정보에서 **이름 / 자료형 / NOT NULL 여부**입니다.
 
-### 예제 5. 열 이름으로 읽기
+### 예제 8. 열 이름으로 읽기
 
 ```python
 conn.row_factory = sqlite3.Row      # 결과를 열 이름으로 접근
@@ -146,14 +178,30 @@ row = cur.execute("SELECT title, author, year FROM books").fetchone()
 print(f"{row['title']} / {row['author']} / {row['year']}")
 ```
 
-기본적으로 조회 결과는 `(값, 값, ...)` 튜플이라 순서로만 꺼낼 수 있습니다. `row_factory = sqlite3.Row`를 지정하면 `row['title']`처럼 **열 이름으로** 읽을 수 있어 코드가 읽기 쉬워집니다.
+기본 결과는 `(값, 값, ...)` 튜플이라 순서로만 꺼낼 수 있습니다. `row_factory = sqlite3.Row`를 지정하면 `row['title']`처럼 **열 이름으로** 읽을 수 있어 코드가 읽기 쉬워집니다.
 
 **이 코드에 쓰인 함수**
 
 - `conn.row_factory = sqlite3.Row` — 이후 조회 결과를 **열 이름으로** 접근할 수 있게 바꾸는 설정입니다.
 - `row['title']` — (설정 후) 순서 대신 **열 이름**으로 값을 읽습니다.
 
-### 예제 6. 파일에 남는지 확인하기
+### 예제 9. 새 데이터를 저장하고 확인하기
+
+```python
+cur.execute("INSERT INTO books VALUES (?, ?, ?, ?, ?)",
+            (19, "모비 딕", "허먼 멜빌", "소설", 1851))
+conn.commit()
+print("추가 후 권수:", cur.execute("SELECT COUNT(*) FROM books").fetchone()[0])
+```
+
+한 건을 `execute`로 넣고 `commit()`으로 확정한 뒤, 다시 `COUNT`로 세어 실제로 늘었는지 확인합니다.
+
+**이 코드에 쓰인 함수**
+
+- `cur.execute("INSERT ...", (값들))` — 값을 `?` 자리에 넣어 **한 행**을 저장합니다.
+- `conn.commit()` — 저장을 파일에 확정합니다.
+
+### 예제 10. 파일에 남는지 확인하기
 
 ```python
 conn.close()                        # 연결을 닫고
@@ -164,7 +212,7 @@ print("다시 열어도:", cur.execute("SELECT COUNT(*) FROM books").fetchone()[
 conn.close()
 ```
 
-SQLite는 데이터를 **파일(`library.db`)에 저장**하므로, 연결을 닫았다 다시 열어도 데이터가 그대로 남아 있습니다. `commit()`으로 확정한 내용이 파일에 보존됨을 눈으로 확인할 수 있습니다.
+SQLite는 데이터를 **파일(`library.db`)에 저장**하므로, 연결을 닫았다 다시 열어도 데이터가 그대로 남아 있습니다.
 
 **이 코드에 쓰인 함수**
 
@@ -174,8 +222,6 @@ SQLite는 데이터를 **파일(`library.db`)에 저장**하므로, 연결을 �
 ## 코드 문제
 
 `library.db`에 이어서 작성합니다. 데이터를 **직접 저장하고 꺼내는** 연습입니다.
-
-### 기본 — 저장하기
 
 **문제 1.** 회원을 담을 `members` 테이블을 만들고(열: `member_id` 기본키, `name` 필수, `join_year`), 회원 한 명을 `INSERT`한 뒤 `commit()` 하세요.
 
@@ -216,8 +262,6 @@ conn.commit()
 ```
 한 건만 넣을 때는 `execute`, 여러 건을 한꺼번에 넣을 때는 `executemany`를 씁니다. 어느 쪽이든 `commit()`으로 확정해야 합니다.
 :::
-
-### 응용 — 꺼내기
 
 **문제 4.** `books`의 전체 권수와 `members`의 전체 인원을 각각 `COUNT`로 세어 함께 출력하세요.
 
@@ -261,12 +305,21 @@ for row in cur.execute("SELECT * FROM members").fetchall():
 for col in cur.execute("PRAGMA table_info(members)"):
     print(col[1], col[2])
 ```
-`PRAGMA table_info(members)`의 결과에서 `col[1]`은 열 이름, `col[2]`는 자료형입니다. 내가 설계한 표가 의도대로 만들어졌는지 확인합니다.
+`PRAGMA table_info(members)`의 결과에서 `col[1]`은 열 이름, `col[2]`는 자료형입니다.
 :::
 
-### 도전 — 설계하고 담기(선택)
+**문제 8.** `books`에서 출간연도(`year`)만 뽑아 리스트로 만든 뒤, 파이썬 `min`·`max`로 **가장 오래된 책의 연도와 가장 최신 책의 연도**를 출력하세요.
 
-**문제 8.** 대출 기록을 담을 `loans` 테이블을 **직접 설계**해(예: `loan_id` 기본키, `book_id`, `member_id`, `loan_date` 텍스트) 3건을 넣고, 전체를 조회해 출력하세요.
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+years = [row[0] for row in cur.execute("SELECT year FROM books")]
+print("가장 오래된:", min(years), "/ 가장 최신:", max(years))
+```
+SQL로 꺼낸 값을 파이썬 리스트로 담으면 `min`·`max` 같은 파이썬 기능으로 자유롭게 다룰 수 있습니다. (연도별 정렬·집계는 이후 주차에서 SQL로도 배웁니다.)
+:::
+
+**문제 9.** 대출 기록을 담을 `loans` 테이블을 **직접 설계**해(예: `loan_id` 기본키, `book_id`, `member_id`, `loan_date` 텍스트) 3건을 넣고, 전체를 조회해 출력하세요.
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
@@ -290,7 +343,7 @@ for row in cur.execute("SELECT * FROM loans").fetchall():
 어떤 정보를 어떤 열로 담을지 스스로 정해 보는 연습입니다. `book_id`·`member_id`가 각각 `books`·`members`를 가리키도록 설계했는데, 이 표들을 실제로 이어 붙이는 `JOIN`은 4주차에서 배웁니다.
 :::
 
-**문제 9.** 지금까지 만든 세 표(`books`, `members`, `loans`)의 건수를 각각 세어, "표이름: N건" 형태로 한 줄씩 출력하세요.
+**문제 10.** 지금까지 만든 세 표(`books`, `members`, `loans`)의 건수를 각각 세어, "표이름: N건" 형태로 한 줄씩 출력하세요.
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
@@ -302,4 +355,4 @@ for table in ["books", "members", "loans"]:
 테이블 이름을 리스트로 두고 반복하면 여러 표의 규모를 한 번에 점검할 수 있습니다. (표 이름은 사용자가 직접 정한 값이라 f-string으로 넣지만, 값을 다룰 때는 항상 `?` 플레이스홀더를 씁니다.)
 :::
 
-**제출물:** `week01_practice.py`와 문제 4·6·9의 실행 결과 화면을 제출합니다.
+**제출물:** `week01_practice.py`와 문제 4·8·10의 실행 결과 화면을 제출합니다.
