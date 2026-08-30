@@ -126,7 +126,7 @@ LIMIT 5
     print(dict(row))
 ```
 
-핵심 SQL은 `PRAGMA table_info`, `ORDER BY`, `LIMIT`입니다.
+핵심 SQL은 `PRAGMA table_info`(표 구조), `ORDER BY`(정렬), `LIMIT`(개수 제한)입니다.
 
 ### 예제 2. 전체 규모와 소스별 건수
 
@@ -160,9 +160,51 @@ ORDER BY wait_min DESC
     print(dict(row))
 ```
 
-값을 SQL 문자열에 직접 붙이지 않고 플레이스홀더로 전달하면 따옴표 오류와 SQL 주입 위험을 줄일 수 있습니다.
+값을 SQL 문자열에 직접 붙이지 않고 플레이스홀더(`?`)로 전달하면 따옴표 오류와 SQL 주입 위험을 줄일 수 있습니다. `WHERE`로 조건을, `AND`로 조건을 결합합니다.
 
-### 예제 4. 결측값 진단
+### 예제 4. 정렬과 상위 N건
+
+```python
+print("대기시간이 긴 상위 5건")
+for row in cur.execute("""
+SELECT appt_id, hospital, department, wait_min
+FROM appointments
+WHERE wait_min IS NOT NULL
+ORDER BY wait_min DESC
+LIMIT 5
+"""):
+    print(dict(row))
+```
+
+`ORDER BY wait_min DESC`로 대기시간이 긴 순서로 정렬하고, `LIMIT 5`로 앞 5건만 가져옵니다. "가장 ~한 상위 N개"는 이 조합으로 구합니다.
+
+### 예제 5. 값의 종류 보기
+
+```python
+print("진료과 종류:")
+for row in cur.execute("SELECT DISTINCT department FROM appointments ORDER BY department"):
+    print("  ", row["department"])
+```
+
+`DISTINCT`는 중복을 없애고 **서로 다른 값의 종류**만 보여 줍니다. 데이터에 어떤 범주가 있는지 파악할 때 씁니다.
+
+### 예제 6. 여러 값 중 하나인 행 찾기
+
+```python
+print("내과 또는 소아과 예약(앞 5건):")
+for row in cur.execute("""
+SELECT appt_id, department, hospital
+FROM appointments
+WHERE department IN ('내과', '소아과')
+ORDER BY appt_id
+LIMIT 5
+"""):
+    print(dict(row))
+```
+
+`IN (...)`은 열 값이 목록 중 하나와 같은지 검사합니다. `department='내과' OR department='소아과'`를 짧게 쓴 것과 같습니다.
+
+### 예제 7. 결측값 진단
 
 `COUNT(열)`은 `NULL`을 제외하지만 `COUNT(*)`은 모든 행을 셉니다. 두 값의 차이로 결측 개수를 계산합니다.
 
@@ -180,7 +222,7 @@ print(dict(row))
 
 예상 결과는 `total=72`, `missing_age=2`, `missing_wait=3`입니다.
 
-### 예제 5. 병원별 요약 통계
+### 예제 8. 병원별 요약 통계
 
 ```python
 for row in cur.execute("""
@@ -199,7 +241,7 @@ ORDER BY avg_wait DESC
 
 `AVG`, `MIN`, `MAX`는 `NULL`을 자동으로 제외합니다. 평균을 해석할 때는 결측 건수도 함께 확인해야 합니다.
 
-### 예제 6. 조건부 집계
+### 예제 9. 조건부 집계
 
 ```python
 for row in cur.execute("""
@@ -216,9 +258,9 @@ ORDER BY hospital
     print(dict(row))
 ```
 
-`CASE WHEN`을 집계 함수 안에 넣으면 여러 품질 조건을 한 SQL로 셀 수 있습니다.
+`SUM(CASE WHEN 조건 THEN 1 ELSE 0 END)`은 조건을 만족하는 행의 개수를 셉니다. 이렇게 하면 여러 품질 조건을 한 SQL로 함께 셀 수 있습니다.
 
-### 예제 7. 유효성 위반 찾기
+### 예제 10. 유효성 위반 찾기
 
 나이는 0~120세, 대기시간은 0~120분이 정상이라고 가정합니다.
 
@@ -233,19 +275,14 @@ ORDER BY appt_id
     print(dict(row))
 ```
 
-대기시간 180분과 나이 220세인 두 행이 탐지됩니다. 발견 즉시 삭제하지 않고 원천 시스템과 업무 규칙을 먼저 확인합니다.
+대기시간 180분과 나이 220세인 두 행이 탐지됩니다. `NOT BETWEEN`은 범위 밖을, `IS NOT NULL`은 결측이 아닌 값을 가려냅니다. 발견 즉시 삭제하지 않고 원천 시스템과 업무 규칙을 먼저 확인합니다.
 
 ## 코드 문제
 
-위의 데이터 준비 코드를 실행한 상태에서 아래 문제를 풉니다. 각 SQL을 `week02_practice.py`에 추가하고 예상 결과와 비교한 뒤 정답·해설을 펼칩니다.
+위 데이터 준비를 실행한 상태에서 이어서 작성합니다. 각 문제의 예상 결과와 비교해 스스로 확인한 뒤, 막히면 정답·해설을 펼칩니다.
 
-### 기본 — 조회와 집계
+**문제 1.** `department`별 예약 건수를 구하고 건수가 많은 순서로 출력하세요.
 
-#### 문제 1. 진료과별 예약 건수
-
-`department`별 예약 건수를 구하고 건수가 많은 순서로 출력합니다.
-
-- 사용할 열: `department`, `COUNT(*) AS cnt`
 - 사용할 구문: `GROUP BY`, `ORDER BY`
 - 예상 결과: 진료과 4개가 출력되고 전체 `cnt`의 합은 72입니다.
 
@@ -254,8 +291,7 @@ ORDER BY appt_id
 ```
 
 ::: {.callout-tip collapse="true"}
-## 문제 1 정답·해설
-
+## 정답·해설
 ```python
 for row in cur.execute("""
 SELECT department, COUNT(*) AS cnt
@@ -265,13 +301,34 @@ ORDER BY cnt DESC, department
 """):
     print(dict(row))
 ```
-
 `GROUP BY department`가 같은 진료과를 묶고 `COUNT(*)`이 각 그룹의 행 수를 셉니다. 동률일 때도 결과가 일정하도록 두 번째 정렬 기준을 넣었습니다.
 :::
 
-#### 문제 2. 특정 기간 예약 조회
+**문제 2.** 대기시간이 긴 예약 **상위 5건**을 `appt_id`, `hospital`, `department`, `wait_min`으로 출력하세요.
 
-2026년 8월 5일부터 8월 10일까지의 **완료된 예약**을 날짜·예약번호 순서로 출력합니다.
+- 사용할 구문: `WHERE ... IS NOT NULL`, `ORDER BY ... DESC`, `LIMIT`
+- 예상 결과: 첫 행의 `wait_min`이 180입니다.
+
+```python
+# TODO: 대기시간 내림차순으로 정렬해 상위 5건만 출력하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for row in cur.execute("""
+SELECT appt_id, hospital, department, wait_min
+FROM appointments
+WHERE wait_min IS NOT NULL
+ORDER BY wait_min DESC
+LIMIT 5
+"""):
+    print(dict(row))
+```
+`ORDER BY wait_min DESC`로 긴 순서로 정렬하고 `LIMIT 5`로 앞 5건만 가져옵니다. 결측(`NULL`)은 미리 걸러 냅니다.
+:::
+
+**문제 3.** 2026년 8월 5일부터 8월 10일까지의 **완료된 예약**을 날짜·예약번호 순서로 출력하세요.
 
 - 출력 열: `appt_id`, `visit_date`, `hospital`, `department`, `status`
 - 사용할 구문: `BETWEEN`, `AND`, `ORDER BY`
@@ -282,8 +339,7 @@ ORDER BY cnt DESC, department
 ```
 
 ::: {.callout-tip collapse="true"}
-## 문제 2 정답·해설
-
+## 정답·해설
 ```python
 for row in cur.execute("""
 SELECT appt_id, visit_date, hospital, department, status
@@ -294,25 +350,62 @@ ORDER BY visit_date, appt_id
 """, ("2026-08-05", "2026-08-10", "완료")):
     print(dict(row))
 ```
-
 날짜가 `YYYY-MM-DD` 형식으로 통일되어 있으므로 문자열 비교가 가능합니다. `BETWEEN`은 시작과 끝도 포함합니다.
 :::
 
-#### 문제 3. 병원별 결측률
+**문제 4.** `appointments`에 있는 **진료과의 종류**를 중복 없이 출력하세요.
 
-병원별 전체 건수, 나이 결측 건수, 대기시간 결측 건수, 대기시간 결측률을 출력합니다.
+- 사용할 구문: `SELECT DISTINCT`, `ORDER BY`
+- 예상 결과: 진료과 4종이 출력됩니다.
 
-- 결측률: `결측 건수 × 100.0 / 전체 건수`
-- `ROUND(..., 1)`로 소수 첫째 자리까지 표시합니다.
-- 예상 결과: 가나병원의 결측은 0건이고 다라병원에는 나이 2건·대기시간 3건이 있습니다.
+```python
+# TODO: 중복 없이 진료과 종류를 출력하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for row in cur.execute("SELECT DISTINCT department FROM appointments ORDER BY department"):
+    print(row["department"])
+```
+`DISTINCT`는 중복을 제거해 서로 다른 값의 종류만 남깁니다.
+:::
+
+**문제 5.** **내과 또는 소아과**의 예약을 `appt_id`, `department`, `hospital`로 예약번호 순서로 출력하세요.(앞 10건)
+
+- 사용할 구문: `IN (...)`, `ORDER BY`, `LIMIT`
+- 예상 결과: 모든 행의 `department`가 내과 또는 소아과입니다.
+
+```python
+# TODO: department IN (...) 조건을 사용하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for row in cur.execute("""
+SELECT appt_id, department, hospital
+FROM appointments
+WHERE department IN ('내과', '소아과')
+ORDER BY appt_id
+LIMIT 10
+"""):
+    print(dict(row))
+```
+`IN`은 여러 값 중 하나와 같은지 검사합니다. `OR`로 길게 쓰는 대신 간결하게 표현합니다.
+:::
+
+**문제 6.** 병원별 전체 건수, 나이 결측 건수, 대기시간 결측 건수, 대기시간 **결측률**을 출력하세요.
+
+- 결측률: `결측 건수 × 100.0 / 전체 건수`, `ROUND(..., 1)`로 소수 첫째 자리까지
+- 예상 결과: 가나병원 결측 0건, 다라병원 나이 2건·대기시간 3건.
 
 ```python
 # TODO: COUNT와 SUM(CASE WHEN ...)으로 결측 리포트를 작성하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
-## 문제 3 정답·해설
-
+## 정답·해설
 ```python
 for row in cur.execute("""
 SELECT
@@ -328,15 +421,10 @@ ORDER BY hospital
 """):
     print(dict(row))
 ```
-
 `100.0`을 곱하면 실수 비율을 얻습니다. 결측률은 소스 품질을 비교하는 기본 지표입니다.
 :::
 
-### 응용 — 조건과 집계를 조합
-
-#### 문제 4. 평균 대기시간이 긴 진료과
-
-진료과별 평균 대기시간과 예약 건수를 구하고 평균 대기시간이 25분 이상인 진료과만 출력합니다.
+**문제 7.** 진료과별 평균 대기시간과 예약 건수를 구하되, 평균 대기시간이 **25분 이상인 진료과만** 출력하세요.
 
 - 사용할 구문: `GROUP BY`, `HAVING`, `AVG`, `ROUND`
 - `WHERE`가 아니라 `HAVING`을 사용합니다.
@@ -346,8 +434,7 @@ ORDER BY hospital
 ```
 
 ::: {.callout-tip collapse="true"}
-## 문제 4 정답·해설
-
+## 정답·해설
 ```python
 for row in cur.execute("""
 SELECT department, COUNT(*) AS cnt,
@@ -359,21 +446,19 @@ ORDER BY avg_wait DESC
 """):
     print(dict(row))
 ```
-
 `WHERE`는 그룹화 전 개별 행을, `HAVING`은 그룹화 후 집계 결과를 필터링합니다.
 :::
 
-#### 문제 5. 연령대별 예약 분포
+**문제 8.** 환자 나이를 `아동·청소년`(20세 미만), `청년`(20~39세), `중장년`(40~64세), `고령`(65세 이상), `미상`으로 나누고 건수와 평균 대기시간을 출력하세요.
 
-환자 나이를 `아동·청소년`(20세 미만), `청년`(20~39세), `중장년`(40~64세), `고령`(65세 이상), `미상`으로 나누고 건수와 평균 대기시간을 출력합니다.
+- 사용할 구문: `CASE WHEN`, `GROUP BY`
 
 ```python
 # TODO: CASE WHEN으로 age_group을 만든 뒤 GROUP BY 하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
-## 문제 5 정답·해설
-
+## 정답·해설
 ```python
 for row in cur.execute("""
 SELECT
@@ -392,21 +477,19 @@ ORDER BY age_group
 """):
     print(dict(row))
 ```
-
 `CASE`는 원본을 바꾸지 않고 분석용 범주를 만듭니다. `NULL`을 먼저 처리해야 의도하지 않은 분류를 막을 수 있습니다.
 :::
 
-#### 문제 6. 전체 평균보다 오래 기다린 예약
+**문제 9.** 전체 평균보다 오래 기다린 예약을 대기시간이 긴 순서로 **최대 10건** 출력하세요.
 
-전체 평균보다 오래 기다린 예약을 대기시간이 긴 순서로 최대 10건 출력합니다.
+- 사용할 구문: 서브쿼리 `(SELECT AVG(wait_min) FROM appointments)`, `ORDER BY`, `LIMIT`
 
 ```python
 # TODO: WHERE 절 오른쪽에 전체 AVG를 구하는 서브쿼리를 작성하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
-## 문제 6 정답·해설
-
+## 정답·해설
 ```python
 for row in cur.execute("""
 SELECT appt_id, hospital, department, wait_min
@@ -417,23 +500,19 @@ LIMIT 10
 """):
     print(dict(row))
 ```
-
 서브쿼리는 전체 평균이라는 값 하나를 반환합니다. `NULL`은 비교 결과가 참이 아니므로 자동으로 제외됩니다.
 :::
 
-### 도전 — 품질 리포트 완성
+**문제 10.** CSV와 JSON 소스를 비교하는 품질 리포트를 **하나의 SELECT 문**으로 작성하세요. `source_type`, 전체 건수, 나이·대기시간 결측 건수, 나이·대기시간 범위 위반 건수, 정상 행 건수를 출력합니다. 정상 행은 두 값이 모두 존재하고 0~120 범위 안인 행입니다.
 
-#### 문제 7. 소스 유형별 품질 리포트
-
-CSV와 JSON 소스를 비교하는 품질 리포트를 **하나의 SELECT 문**으로 작성합니다. `source_type`, 전체 건수, 나이·대기시간 결측 건수, 나이·대기시간 범위 위반 건수, 정상 행 건수를 출력합니다. 정상 행은 두 값이 모두 존재하고 0~120 범위 안인 행입니다.
+- 사용할 구문: `SUM(CASE WHEN ...)` 여러 번, `GROUP BY`
 
 ```python
 # TODO: SUM(CASE WHEN ...)을 여러 번 사용해 품질 리포트를 완성하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
-## 문제 7 정답·해설
-
+## 정답·해설
 ```python
 for row in cur.execute("""
 SELECT
@@ -453,6 +532,5 @@ ORDER BY source_type
 """):
     print(dict(row))
 ```
-
 여러 품질 조건을 `SUM(CASE WHEN ...)`으로 표현하면 한 번의 조회로 완전성·유효성 지표를 함께 얻을 수 있습니다.
 :::
