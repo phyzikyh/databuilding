@@ -4,6 +4,7 @@ project:
 
 book:
   title: "데이터구축실습"
+  author: "신기홍"
   search: true
   page-footer:
     left: "데이터구축실습 · Data Preparation Practice"
