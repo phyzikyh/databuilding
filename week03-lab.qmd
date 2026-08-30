@@ -1,132 +1,425 @@
 # 3주차 코딩실습
 
-## 예제 코드
+## 데이터 준비
 
-주제는 "도서관 신착 도서"입니다. HTML 크롤링과 API 수집을 한 번에 연습합니다.
+실제 사이트를 무단으로 크롤링하지 않기 위해, 연습용 **예제 HTML**과 **가짜 API 함수**로 수집을 연습합니다. 주제는 "도서 목록"입니다. `BeautifulSoup`이 필요합니다(`pip install beautifulsoup4`).
 
 ```python
-import sqlite3, time
 from bs4 import BeautifulSoup
+import sqlite3, time
 
-conn = sqlite3.connect("library.db")
-cur = conn.cursor()
-cur.execute("""CREATE TABLE IF NOT EXISTS books(
-    isbn TEXT PRIMARY KEY, title TEXT, author TEXT, year INTEGER, src TEXT)""")
+# (1) 실제 웹페이지 대신 사용할 예제 HTML — 책 목록
+HTML = """
+<div class="book-list">
+  <div class="book" data-id="1">
+    <span class="title">데미안</span><span class="author">헤르만 헤세</span>
+    <span class="price">9800</span><span class="rating">4.5</span>
+  </div>
+  <div class="book" data-id="2">
+    <span class="title">1984</span><span class="author">조지 오웰</span>
+    <span class="price">12000</span><span class="rating">4.7</span>
+  </div>
+  <div class="book" data-id="3">
+    <span class="title">코스모스</span><span class="author">칼 세이건</span>
+    <span class="price">18000</span><span class="rating">4.8</span>
+  </div>
+</div>
+"""
 
-# 1) HTML 크롤링 부분(예제 HTML)
-html = """
-<div class="booklist">
-  <div class="book"><b class="t">파이썬 정석</b><i class="a">김코딩</i>
-     <em class="y">2023</em><code class="i">978-1</code></div>
-  <div class="book"><b class="t">데이터 과학 입문</b><i class="a">이분석</i>
-     <em class="y">2024</em><code class="i">978-2</code></div>
-</div>"""
-soup = BeautifulSoup(html, "html.parser")
-for b in soup.select("div.book"):
-    cur.execute("INSERT OR REPLACE INTO books VALUES (?,?,?,?,?)", (
-        b.select_one("code.i").get_text(strip=True),
-        b.select_one("b.t").get_text(strip=True),
-        b.select_one("i.a").get_text(strip=True),
-        int(b.select_one("em.y").get_text(strip=True)),
-        "crawl"))
+# (2) 실제 API 대신 사용할 가짜 API — 페이지네이션 지원
+API_DATA = [
+    {"id": 4, "title": "사피엔스",   "author": "유발 하라리", "price": 22000, "rating": 4.6},
+    {"id": 5, "title": "팩트풀니스", "author": "한스 로슬링", "price": 17000, "rating": 4.4},
+    {"id": 6, "title": "아몬드",     "author": "손원평",     "price": 11000, "rating": 4.3},
+    {"id": 7, "title": "하얼빈",     "author": "김훈",       "price": 15000, "rating": 4.5},
+]
+def fetch_books(page, per=2):
+    start = (page - 1) * per
+    return API_DATA[start:start + per]   # 없는 페이지는 빈 리스트
+
+# (3) 수집 결과를 저장할 DB
+conn = sqlite3.connect("collect.db"); cur = conn.cursor()
+cur.execute("DROP TABLE IF EXISTS books")
+cur.execute("""CREATE TABLE books(
+    book_id INTEGER PRIMARY KEY, title TEXT, author TEXT,
+    price INTEGER, rating REAL, src TEXT)""")
 conn.commit()
-
-# 2) API 수집 부분(가짜 API, 페이지네이션 + 간격)
-def fake_api(page):
-    db = {1:[{"isbn":"978-3","title":"AI 윤리","author":"박생각","year":2025}],
-          2:[{"isbn":"978-4","title":"통계학 노트","author":"최평균","year":2022}]}
-    return db.get(page, [])
-for page in [1,2]:
-    for d in fake_api(page):
-        cur.execute("INSERT OR REPLACE INTO books VALUES (?,?,?,?,?)",
-            (d["isbn"], d["title"], d["author"], d["year"], "api"))
-    conn.commit()
-    time.sleep(1)   # 속도 조절
-
-# 3) 출처별·연도별 집계
-print("== 출처별 도서 수 ==")
-for src, cnt in cur.execute("SELECT src, COUNT(*) FROM books GROUP BY src"):
-    print(f"  {src}: {cnt}권")
-print("== 2023년 이후 도서 ==")
-for row in cur.execute("SELECT title, year FROM books WHERE year>=2023 ORDER BY year"):
-    print("  ", row)
-conn.close()
+print("준비 완료")
 ```
 
-`soup.select`로 여러 태그를 고르고 `select_one`으로 하나를 콕 집어 텍스트를 꺼내는 흐름, 그리고 가짜 API를 페이지 1·2로 반복 호출하며 `time.sleep(1)`로 간격을 두는 흐름에 주목합니다. `INSERT OR REPLACE`는 같은 ISBN이 이미 있으면 덮어써서 중복을 막아 줍니다.
+`HTML`은 크롤링 대상 페이지, `fetch_books`는 API를 대신합니다. 두 소스에서 모은 데이터를 최종적으로 `books` 테이블에 저장합니다.
+
+## 예제 코드
+
+### 예제 1. HTML 파싱 시작하기
+
+```python
+soup = BeautifulSoup(HTML, "html.parser")
+title = soup.select_one("div.book span.title")
+print("첫 책 제목:", title.get_text(strip=True))
+```
+
+`BeautifulSoup(HTML, "html.parser")`가 HTML을 파싱해 탐색 가능한 객체로 만듭니다. `select_one(CSS선택자)`는 조건에 맞는 **첫 요소 하나**를 찾습니다.
+
+### 예제 2. 여러 요소 선택하기
+
+```python
+books = soup.select("div.book")
+print("책 개수:", len(books))
+```
+
+`select(CSS선택자)`는 조건에 맞는 **모든 요소**를 리스트로 돌려줍니다. `div.book`은 "class가 book인 div"를 뜻합니다.
+
+### 예제 3. 텍스트 추출하기
+
+```python
+for b in soup.select("div.book"):
+    print(b.select_one(".title").get_text(strip=True))
+```
+
+`get_text(strip=True)`는 요소 안의 글자를 앞뒤 공백 없이 가져옵니다. 태그 안의 실제 값을 꺼낼 때 씁니다.
+
+### 예제 4. 속성 값 추출하기
+
+```python
+for b in soup.select("div.book"):
+    print("data-id:", b["data-id"])
+```
+
+`태그["속성명"]`으로 태그의 속성 값을 읽습니다(`data-id`, `href` 등). 없을 수 있는 속성은 `b.get("data-id")`로 안전하게 읽습니다.
+
+### 예제 5. 한 책을 딕셔너리로 파싱
+
+```python
+b = soup.select_one("div.book")
+one = {
+    "id":     int(b["data-id"]),
+    "title":  b.select_one(".title").get_text(strip=True),
+    "price":  int(b.select_one(".price").get_text(strip=True)),
+    "rating": float(b.select_one(".rating").get_text(strip=True)),
+}
+print(one)
+```
+
+추출한 값을 딕셔너리에 담으면 다루기 쉬워집니다. 숫자는 `int`·`float`로 형을 바꿔 둡니다.
+
+### 예제 6. 전체를 반복해 파싱
+
+```python
+crawled = []
+for b in soup.select("div.book"):
+    crawled.append({
+        "id":     int(b["data-id"]),
+        "title":  b.select_one(".title").get_text(strip=True),
+        "author": b.select_one(".author").get_text(strip=True),
+        "price":  int(b.select_one(".price").get_text(strip=True)),
+        "rating": float(b.select_one(".rating").get_text(strip=True)),
+    })
+print("크롤링 수집:", len(crawled), "건")
+```
+
+같은 파싱을 `for`로 반복해 모든 책을 리스트에 모읍니다. 크롤링의 핵심은 "반복되는 구조에서 같은 규칙으로 값을 뽑는 것"입니다.
+
+### 예제 7. 가짜 API에서 한 페이지 받기
+
+```python
+page1 = fetch_books(1)
+print("1페이지:", page1)
+```
+
+API는 보통 정돈된 데이터(여기서는 딕셔너리 리스트)를 돌려줍니다. `fetch_books(1)`은 1페이지 결과를 가져옵니다.
+
+### 예제 8. 페이지네이션으로 여러 페이지 수집
+
+```python
+api_rows = []
+page = 1
+while True:
+    got = fetch_books(page)
+    if not got:              # 빈 페이지면 종료
+        break
+    api_rows.extend(got)
+    time.sleep(0.2)          # 서버 예절: 요청 간격
+    page += 1
+print("API 수집:", len(api_rows), "건")
+```
+
+데이터가 여러 페이지로 나뉘어 있으면, 빈 결과가 나올 때까지 페이지를 넘기며 모읍니다. `time.sleep`으로 요청 간격을 둬 서버 부하를 줄입니다.
+
+### 예제 9. 수집 결과를 DB에 저장
+
+```python
+cur.executemany("INSERT INTO books VALUES (?,?,?,?,?,?)",
+    [(d["id"], d["title"], d["author"], d["price"], d["rating"], "crawl") for d in crawled])
+cur.executemany("INSERT INTO books VALUES (?,?,?,?,?,?)",
+    [(d["id"], d["title"], d["author"], d["price"], d["rating"], "api") for d in api_rows])
+conn.commit()
+print("저장 완료:", cur.execute("SELECT COUNT(*) FROM books").fetchone()[0], "건")
+```
+
+크롤링·API로 모은 딕셔너리 리스트를 `executemany`로 한 번에 저장합니다. `src` 열로 어느 소스에서 왔는지 함께 기록합니다.
+
+### 예제 10. 저장한 데이터 조회·집계
+
+```python
+print("출처별 건수:")
+for row in cur.execute("SELECT src, COUNT(*) FROM books GROUP BY src"):
+    print("  ", row)
+
+print("평점 4.5 이상:")
+for row in cur.execute("SELECT title, rating FROM books WHERE rating >= 4.5 ORDER BY rating DESC"):
+    print("  ", row)
+```
+
+저장한 뒤에는 1·2주차에서 배운 `COUNT`·`GROUP BY`·`WHERE`로 수집 결과를 점검합니다. 수집이 끝이 아니라 저장·확인까지가 한 흐름입니다.
 
 ## 코드 문제
 
-주제는 "영화 정보 수집"입니다.
+이번에는 "영화 목록"을 수집합니다. 아래 문제용 데이터를 먼저 실행한 뒤, 각 문제의 예상 결과와 비교하며 풉니다.
 
 ```python
-import sqlite3, time
-from bs4 import BeautifulSoup
+# 문제용 예제 HTML — 영화 목록
+MOVIE_HTML = """
+<ul class="movie-list">
+  <li class="movie" data-code="M01">
+    <span class="ti">인터스텔라</span><span class="genre">SF</span>
+    <span class="score">8.9</span><span class="year">2014</span>
+  </li>
+  <li class="movie" data-code="M02">
+    <span class="ti">기생충</span><span class="genre">드라마</span>
+    <span class="score">8.6</span><span class="year">2019</span>
+  </li>
+  <li class="movie" data-code="M03">
+    <span class="ti">라라랜드</span><span class="genre">뮤지컬</span>
+    <span class="score">8.2</span><span class="year">2016</span>
+  </li>
+</ul>
+"""
 
-conn = sqlite3.connect("movie.db")
-cur = conn.cursor()
+# 문제용 가짜 API — 영화(페이지네이션)
+MOVIE_API = [
+    {"code": "M04", "title": "인셉션",   "genre": "SF",     "score": 8.8, "year": 2010},
+    {"code": "M05", "title": "코코",     "genre": "애니",   "score": 8.4, "year": 2017},
+    {"code": "M06", "title": "위플래쉬", "genre": "드라마", "score": 8.5, "year": 2014},
+]
+def fetch_movies(page, per=2):
+    start = (page - 1) * per
+    return MOVIE_API[start:start + per]
 
-# [문제 1] movies 테이블 생성
-#   컬럼: movie_id(정수,기본키), title(문자), genre(문자),
-#         rating(실수, 평점), src(문자)
-
-# [문제 2] 아래 예제 HTML에서 제목/장르/평점을 뽑아 적재하세요(src='crawl').
-html = """
-<div class="movies">
-  <div class="m"><span class="ti">인터스텔라</span><span class="ge">SF</span><span class="ra">9.1</span></div>
-  <div class="m"><span class="ti">기생충</span><span class="ge">드라마</span><span class="ra">8.9</span></div>
-</div>"""
-#   힌트: soup.select("div.m"), select_one("span.ti") 등. movie_id는 1,2로 직접 부여.
-
-# [문제 3] 아래 가짜 API 함수를 페이지 1,2로 호출해 적재하세요(src='api').
-def fake_api(page):
-    db = {1:[{"id":3,"title":"라라랜드","genre":"뮤지컬","rating":8.5}],
-          2:[{"id":4,"title":"올드보이","genre":"스릴러","rating":8.4}]}
-    return db.get(page, [])
-#   힌트: for page in [1,2]: ... time.sleep(1)
-
-# [문제 4] 평점이 8.5 이상인 영화의 제목과 평점을 평점 내림차순으로 출력하세요.
-
-# [문제 5] 출처(src)별 영화 개수를 집계해 출력하세요.
-
-conn.close()
+cur.execute("DROP TABLE IF EXISTS movies")
+cur.execute("""CREATE TABLE movies(
+    code TEXT PRIMARY KEY, title TEXT, genre TEXT,
+    score REAL, year INTEGER, src TEXT)""")
+conn.commit()
 ```
 
-**도전 과제(선택):** 장르별 평균 평점을 구하고, 평균 평점이 가장 높은 장르를 찾아 출력해 보세요. (힌트: `GROUP BY genre` + `ORDER BY AVG(rating) DESC LIMIT 1`)
+**문제 1.** `MOVIE_HTML`을 파싱해 모든 영화의 **제목**을 한 줄씩 출력하세요.
+
+- 사용할 것: `BeautifulSoup`, `select`, `get_text(strip=True)`
+- 예상 결과: 인터스텔라, 기생충, 라라랜드 3개.
+
+```python
+# TODO: MOVIE_HTML을 파싱해 제목만 출력하세요.
+```
 
 ::: {.callout-tip collapse="true"}
-## 실습 정답 예시
+## 정답·해설
 ```python
-import sqlite3, time
-from bs4 import BeautifulSoup
-conn=sqlite3.connect("movie.db"); cur=conn.cursor()
-cur.execute("""CREATE TABLE IF NOT EXISTS movies(
- movie_id INTEGER PRIMARY KEY, title TEXT, genre TEXT, rating REAL, src TEXT)""")
-html="""<div class="movies">
- <div class="m"><span class="ti">인터스텔라</span><span class="ge">SF</span><span class="ra">9.1</span></div>
- <div class="m"><span class="ti">기생충</span><span class="ge">드라마</span><span class="ra">8.9</span></div></div>"""
-soup=BeautifulSoup(html,"html.parser")
-for i,m in enumerate(soup.select("div.m"), start=1):
-    cur.execute("INSERT OR REPLACE INTO movies VALUES (?,?,?,?,?)",
-        (i, m.select_one("span.ti").get_text(strip=True),
-         m.select_one("span.ge").get_text(strip=True),
-         float(m.select_one("span.ra").get_text(strip=True)), "crawl"))
-def fake_api(page):
-    db={1:[{"id":3,"title":"라라랜드","genre":"뮤지컬","rating":8.5}],
-        2:[{"id":4,"title":"올드보이","genre":"스릴러","rating":8.4}]}
-    return db.get(page,[])
-for page in [1,2]:
-    for d in fake_api(page):
-        cur.execute("INSERT OR REPLACE INTO movies VALUES (?,?,?,?,?)",
-            (d["id"],d["title"],d["genre"],d["rating"],"api"))
-    conn.commit(); time.sleep(1)
-for row in cur.execute("SELECT title,rating FROM movies WHERE rating>=8.5 ORDER BY rating DESC"):
-    print(row)
-for row in cur.execute("SELECT src,COUNT(*) FROM movies GROUP BY src"):
-    print(row)
-# 도전
-print(cur.execute("""SELECT genre, ROUND(AVG(rating),2) FROM movies
-     GROUP BY genre ORDER BY AVG(rating) DESC LIMIT 1""").fetchone())
-conn.close()
+msoup = BeautifulSoup(MOVIE_HTML, "html.parser")
+for m in msoup.select("li.movie"):
+    print(m.select_one(".ti").get_text(strip=True))
 ```
+`select("li.movie")`로 모든 영화 항목을 찾고, 각 항목에서 `.ti`의 텍스트를 뽑습니다.
+:::
+
+**문제 2.** 각 영화의 `data-code` **속성 값**을 출력하세요.
+
+- 사용할 것: `태그["data-code"]`
+- 예상 결과: M01, M02, M03.
+
+```python
+# TODO: 각 영화의 data-code 속성을 출력하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for m in msoup.select("li.movie"):
+    print(m["data-code"])
+```
+속성 값은 `태그["속성명"]`으로 읽습니다.
+:::
+
+**문제 3.** 첫 번째 영화 하나를 **딕셔너리**로 파싱해 출력하세요(코드·제목·장르·평점·연도).
+
+- 예상 결과: `{'code': 'M01', 'title': '인터스텔라', 'genre': 'SF', 'score': 8.9, 'year': 2014}`
+
+```python
+# TODO: 첫 영화를 dict로 파싱하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+m = msoup.select_one("li.movie")
+one = {
+    "code":  m["data-code"],
+    "title": m.select_one(".ti").get_text(strip=True),
+    "genre": m.select_one(".genre").get_text(strip=True),
+    "score": float(m.select_one(".score").get_text(strip=True)),
+    "year":  int(m.select_one(".year").get_text(strip=True)),
+}
+print(one)
+```
+숫자 평점·연도는 `float`·`int`로 형을 바꿔 담습니다.
+:::
+
+**문제 4.** `MOVIE_HTML` 전체를 반복 파싱해 **딕셔너리 리스트** `crawled_movies`를 만드세요.
+
+- 예상 결과: 길이 3인 리스트.
+
+```python
+# TODO: 모든 영화를 dict 리스트로 파싱하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+crawled_movies = []
+for m in msoup.select("li.movie"):
+    crawled_movies.append({
+        "code":  m["data-code"],
+        "title": m.select_one(".ti").get_text(strip=True),
+        "genre": m.select_one(".genre").get_text(strip=True),
+        "score": float(m.select_one(".score").get_text(strip=True)),
+        "year":  int(m.select_one(".year").get_text(strip=True)),
+    })
+print(len(crawled_movies))
+```
+예제 6과 같은 구조로, 각 영화를 딕셔너리로 만들어 리스트에 모읍니다.
+:::
+
+**문제 5.** `fetch_movies`를 페이지네이션으로 호출해 **모든 영화**를 `api_movies`에 모으세요.
+
+- 사용할 것: `while True` + 빈 결과면 `break`, `extend`
+- 예상 결과: 3건(M04·M05·M06).
+
+```python
+# TODO: 빈 페이지가 나올 때까지 수집하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+api_movies = []
+page = 1
+while True:
+    got = fetch_movies(page)
+    if not got:
+        break
+    api_movies.extend(got)
+    page += 1
+print("API 수집:", len(api_movies), "건")
+```
+빈 리스트가 반환될 때까지 페이지를 넘기며 모읍니다.
+:::
+
+**문제 6.** 수집 사이에 `time.sleep(0.2)`으로 **간격**을 두도록 문제 5의 반복을 고치세요.
+
+- 이유: 서버에 부담을 주지 않기 위한 크롤링 예절.
+
+```python
+# TODO: 반복 안에 time.sleep(0.2)를 추가하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+api_movies = []
+page = 1
+while True:
+    got = fetch_movies(page)
+    if not got:
+        break
+    api_movies.extend(got)
+    time.sleep(0.2)
+    page += 1
+```
+요청 사이에 지연을 두는 것(rate limiting)은 429(요청 과다)를 피하는 기본 예절입니다.
+:::
+
+**문제 7.** `crawled_movies`와 `api_movies`를 `movies` 테이블에 저장하세요(각각 `src='crawl'`, `'api'`).
+
+- 사용할 것: `executemany`, `commit`
+
+```python
+# TODO: 두 소스를 movies 테이블에 저장하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+cur.executemany("INSERT INTO movies VALUES (?,?,?,?,?,?)",
+    [(d["code"], d["title"], d["genre"], d["score"], d["year"], "crawl") for d in crawled_movies])
+cur.executemany("INSERT INTO movies VALUES (?,?,?,?,?,?)",
+    [(d["code"], d["title"], d["genre"], d["score"], d["year"], "api") for d in api_movies])
+conn.commit()
+```
+딕셔너리 리스트를 튜플 리스트로 바꿔 `executemany`로 한 번에 저장합니다.
+:::
+
+**문제 8.** 저장된 영화의 **전체 건수**와 **출처별 건수**를 출력하세요.
+
+- 예상 결과: 전체 6건, crawl 3·api 3.
+
+```python
+# TODO: COUNT와 GROUP BY로 출력하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+print("전체:", cur.execute("SELECT COUNT(*) FROM movies").fetchone()[0])
+for row in cur.execute("SELECT src, COUNT(*) FROM movies GROUP BY src"):
+    print(row)
+```
+저장 뒤에는 `COUNT`·`GROUP BY`로 수집 결과를 점검합니다.
+:::
+
+**문제 9.** 평점(`score`)이 **8.5 이상**인 영화를 평점 내림차순으로 출력하세요.
+
+- 사용할 것: `WHERE`, `ORDER BY ... DESC`
+- 예상 결과: 인터스텔라(8.9)·인셉션(8.8)·기생충(8.6)·위플래쉬(8.5).
+
+```python
+# TODO: WHERE score >= 8.5 로 조회하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for row in cur.execute("""SELECT title, score FROM movies
+                          WHERE score >= 8.5 ORDER BY score DESC"""):
+    print(row)
+```
+저장이 끝난 데이터는 1·2주차의 SQL로 얼마든지 분석할 수 있습니다.
+:::
+
+**문제 10.** **장르별** 영화 편수와 평균 평점을 편수 많은 순으로 출력하세요.
+
+- 사용할 것: `GROUP BY`, `COUNT`, `ROUND(AVG(...), 2)`, `ORDER BY`
+
+```python
+# TODO: 장르별 편수·평균 평점을 출력하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for row in cur.execute("""
+    SELECT genre, COUNT(*) AS cnt, ROUND(AVG(score), 2) AS avg_score
+    FROM movies GROUP BY genre ORDER BY cnt DESC, genre"""):
+    print(row)
+```
+수집한 데이터를 장르라는 기준으로 묶어 편수·평균 평점을 함께 봅니다.
 :::
