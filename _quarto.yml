@@ -13,7 +13,7 @@ book:
     - part: "1주차 · 데이터 파이프라인과 품질의 이해"
       chapters: [week01-theory.qmd, week01-quiz.qmd, week01-lab.qmd]
     - part: "2주차 · 데이터 수집 전략과 데이터 소스"
-      chapters: [week02-theory.qmd, week02-quiz.qmd, week02-lab.qmd]
+      chapters: [week02-theory.qmd, week02-quiz.qmd, week02-lab.qmd, week02-appendix.qmd]
     - part: "3주차 · 웹 크롤링과 API 수집 실습"
       chapters: [week03-theory.qmd, week03-quiz.qmd, week03-lab.qmd]
     - part: "4주차 · 데이터 파이프라인 패턴과 적재"
