@@ -12,35 +12,35 @@ book:
   chapters:
     - index.qmd
     - part: "1주차 · 데이터 파이프라인과 품질의 이해"
-      chapters: [week01-theory.qmd, week01-quiz.qmd, week01-lab.qmd]
+      chapters: [week01_lecture.qmd, week01_quiz.qmd, week01_code.qmd]
     - part: "2주차 · 데이터 수집 전략과 데이터 소스"
-      chapters: [week02-theory.qmd, week02-quiz.qmd, week02-lab.qmd, week02-appendix.qmd]
+      chapters: [week02_lecture.qmd, week02_quiz.qmd, week02_code.qmd, week02_appendix.qmd]
     - part: "3주차 · 웹 크롤링과 API 수집 실습"
-      chapters: [week03-theory.qmd, week03-quiz.qmd, week03-lab.qmd]
+      chapters: [week03_lecture.qmd, week03_quiz.qmd, week03_code.qmd]
     - part: "4주차 · 데이터 파이프라인 패턴과 적재"
-      chapters: [week04-theory.qmd, week04-quiz.qmd, week04-lab.qmd]
+      chapters: [week04_lecture.qmd, week04_quiz.qmd, week04_code.qmd]
     - part: "5주차 · 탐색적 데이터 분석(EDA)과 품질 점검"
-      chapters: [week05-theory.qmd, week05-quiz.qmd, week05-lab.qmd]
+      chapters: [week05_lecture.qmd, week05_quiz.qmd, week05_code.qmd]
     - part: "6주차 · 데이터 정제와 변환"
-      chapters: [week06-theory.qmd, week06-quiz.qmd, week06-lab.qmd]
+      chapters: [week06_lecture.qmd, week06_quiz.qmd, week06_code.qmd]
     - part: "7주차 · 데이터 품질 검증과 자동화"
-      chapters: [week07-theory.qmd, week07-quiz.qmd, week07-lab.qmd]
+      chapters: [week07_lecture.qmd, week07_quiz.qmd, week07_code.qmd]
     - part: "8주차 · 파이프라인 통합 실습"
-      chapters: [week08-theory.qmd, week08-quiz.qmd, week08-lab.qmd]
+      chapters: [week08_lecture.qmd, week08_quiz.qmd, week08_code.qmd]
     - part: "9주차 · 학습데이터 구축과 라벨링 개념"
-      chapters: [week09-theory.qmd, week09-quiz.qmd, week09-lab.qmd]
+      chapters: [week09_lecture.qmd, week09_quiz.qmd, week09_code.qmd]
     - part: "10주차 · 이미지 라벨링"
-      chapters: [week10-theory.qmd, week10-quiz.qmd, week10-lab.qmd]
+      chapters: [week10_lecture.qmd, week10_quiz.qmd, week10_code.qmd]
     - part: "11주차 · 텍스트·시계열 라벨링"
-      chapters: [week11-theory.qmd, week11-quiz.qmd, week11-lab.qmd]
+      chapters: [week11_lecture.qmd, week11_quiz.qmd, week11_code.qmd]
     - part: "12주차 · 데이터셋 검증과 편향 점검"
-      chapters: [week12-theory.qmd, week12-quiz.qmd, week12-lab.qmd]
+      chapters: [week12_lecture.qmd, week12_quiz.qmd, week12_code.qmd]
     - part: "13주차 · 모델링 준비(인코딩·스케일링·특성공학)"
-      chapters: [week13-theory.qmd, week13-quiz.qmd, week13-lab.qmd]
+      chapters: [week13_lecture.qmd, week13_quiz.qmd, week13_code.qmd]
     - part: "14주차 · Baseline 모델링과 성능 평가"
-      chapters: [week14-theory.qmd, week14-quiz.qmd, week14-lab.qmd]
+      chapters: [week14_lecture.qmd, week14_quiz.qmd, week14_code.qmd]
     - part: "15주차 · 최종 모델 평가와 데이터셋 완성"
-      chapters: [week15-theory.qmd, week15-quiz.qmd, week15-lab.qmd]
+      chapters: [week15_lecture.qmd, week15_quiz.qmd, week15_code.qmd]
 
 crossref:
   fig-title: "그림"
