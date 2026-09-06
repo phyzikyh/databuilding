@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /books/
+Allow: /api/
+Crawl-delay: 1
+

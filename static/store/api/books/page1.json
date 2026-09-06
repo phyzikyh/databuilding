@@ -1,0 +1,1 @@
+{"page":1,"per_page":3,"total":9,"next":"page2.json","books":[{"id":"B001","title":"데미안","author":"헤르만 헤세","price":9800,"rating":4.5},{"id":"B002","title":"1984","author":"조지 오웰","price":12000,"rating":4.7},{"id":"B003","title":"코스모스","author":"칼 세이건","price":18000,"rating":4.8}]}

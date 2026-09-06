@@ -30,6 +30,9 @@ jobs:
       - name: Render book
         run: quarto render
 
+      - name: Add crawling practice store
+        run: cp -R static/store _book/store
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
