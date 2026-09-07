@@ -11,7 +11,6 @@ from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, r
 
 conn = sqlite3.connect("model.db"); cur = conn.cursor()
 
-# 0) 13주차 산출물 형태의 준비된 데이터(모두 숫자)
 cur.execute("DROP TABLE IF EXISTS model_input")
 cur.execute("""CREATE TABLE model_input(
     cid INTEGER PRIMARY KEY, is_seoul INT, is_busan INT,

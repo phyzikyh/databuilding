@@ -2,6 +2,8 @@
 /_book/
 /.quarto/
 /_freeze/
+# preview/개별 렌더가 루트에 남기는 주차별 html (interactive.html은 소스라 제외)
+/week*.html
 
 # 실습 중 생성되는 SQLite DB
 *.db

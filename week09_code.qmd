@@ -52,7 +52,6 @@ for content, label in cur.execute("""
     ORDER BY s.sample_id"""):
     print(f"  [{label}] {content}")
 
-# 5) 라벨 분포(클래스 균형 점검의 맛보기 — 12주차 연결)
 print("\n== 라벨 분포 ==")
 for label, cnt in cur.execute("""
     SELECT l.label_name, COUNT(*) FROM annotations a

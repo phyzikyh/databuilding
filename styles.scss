@@ -297,3 +297,64 @@ h1.title, .quarto-title h1 { font-weight: 800; }
 
 // 섹션 사이 여백(주차 구분감)
 .sidebar-navigation > ul > li.sidebar-item-section { margin-top: 0.5rem; }
+
+// ══════════════════════════════════════════════════════════
+//  색 보강 — 브랜드 청록(#1AB18B) 팔레트로 표·다이어그램에 생기
+// ══════════════════════════════════════════════════════════
+
+// 표 머리행 — 청록 톤 배경 + 강조 괘선, 짝수행 옅은 청록 줄무늬
+// (Bootstrap 표 스타일이 특이도로 덮으므로 클래스 + !important 로 겨냥)
+.table thead th, table thead th {
+  background: #e3f5ee !important;
+  color: #0f5f4a !important;
+  border-top: 2px solid #1AB18B !important;
+  border-bottom: 2px solid #1AB18B !important;
+}
+.table tbody tr:nth-child(even) td, table tbody tr:nth-child(even) td { background: #f4fbf9 !important; }
+.table tbody tr:hover td, table tbody tr:hover td { background: #eafaf4 !important; }
+.table tbody tr:last-child td, table tbody tr:last-child td { border-bottom: 2px solid #1AB18B !important; }
+
+// 소제목 밑줄에 옅은 청록 — 무채색 회색선 대체
+h2 { border-bottom: 2px solid #d8f0e8; }
+
+// ── Mermaid 다이어그램 채색(neutral 회색 → 브랜드 청록) ──
+// 렌더 후 SVG는 pre.mermaid 래퍼 없이 svg#mermaid-N 로 남으므로 id 접두로 겨냥
+svg[id^="mermaid-"] g.node rect,
+svg[id^="mermaid-"] g.node polygon,
+svg[id^="mermaid-"] g.node circle,
+svg[id^="mermaid-"] g.node path,
+svg[id^="mermaid-"] g.node ellipse {
+  fill: #eafaf4 !important;
+  stroke: #1AB18B !important;
+  stroke-width: 1.5px !important;
+}
+svg[id^="mermaid-"] g.node .nodeLabel,
+svg[id^="mermaid-"] g.node text { fill: #14322a !important; color: #14322a !important; }
+
+// 판단(마름모=polygon) 노드는 앰버로 구분
+svg[id^="mermaid-"] g.node.default polygon { fill: #fff3e0 !important; stroke: #F08C1D !important; }
+
+// 묶음(subgraph/cluster) 배경 — 아주 옅은 청록
+svg[id^="mermaid-"] .cluster rect {
+  fill: #f2fbf8 !important;
+  stroke: #1AB18B !important;
+  stroke-dasharray: 4 3 !important;
+}
+svg[id^="mermaid-"] .cluster .nodeLabel { fill: #0f5f4a !important; }
+
+// 화살표·연결선 — 진한 청록
+svg[id^="mermaid-"] .flowchart-link,
+svg[id^="mermaid-"] .edgePath path,
+svg[id^="mermaid-"] .edgePath .path { stroke: #128a6c !important; stroke-width: 1.6px !important; }
+svg[id^="mermaid-"] .marker,
+svg[id^="mermaid-"] marker path { fill: #128a6c !important; stroke: #128a6c !important; }
+
+// 화살표 위 라벨 글상자 — 흰 바탕에 회색 글자(가독성)
+svg[id^="mermaid-"] .edgeLabel rect,
+svg[id^="mermaid-"] .edgeLabel .labelBkg {
+  background-color: #ffffff !important;
+  fill: #ffffff !important;
+}
+svg[id^="mermaid-"] .edgeLabel,
+svg[id^="mermaid-"] .edgeLabel text,
+svg[id^="mermaid-"] .edgeLabel .edgeLabel { fill: #4a4f57 !important; color: #4a4f57 !important; }

@@ -332,7 +332,7 @@ conn.commit()
 for row in cur.execute("SELECT * FROM loans").fetchall():
     print(row)
 ```
-어떤 정보를 어떤 열로 담을지 스스로 정해 보는 연습입니다. `book_id`·`member_id`가 각각 `books`·`members`를 가리키도록 설계했는데, 이 표들을 실제로 이어 붙이는 `JOIN`은 4주차에서 배웁니다.
+어떤 정보를 어떤 열로 담을지 스스로 정해 보는 연습입니다.
 :::
 
 **문제 10.** 지금까지 만든 세 표(`books`, `members`, `loans`)의 건수를 각각 세어, "표이름: N건" 형태로 한 줄씩 출력하세요.
