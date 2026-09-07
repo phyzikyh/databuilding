@@ -103,7 +103,7 @@ conn.commit()
 print("appointments 테이블 생성 완료")
 ```
 
-`DROP TABLE IF EXISTS`부터 다시 실행하면 항상 같은 72건으로 초기화됩니다. `random.seed(2026)`을 사용했기 때문에 모든 학생에게 동일한 결과가 나옵니다.
+`DROP TABLE IF EXISTS`부터 다시 실행하면 항상 같은 72건으로 초기화 되며, `random.seed(2026)`을 사용했기 때문에 동일한 결과가 나옵니다.
 
 ## 예제 코드
 
@@ -131,6 +131,12 @@ LIMIT 5
 **이 코드에 쓰인 명령과 함수**
 
 - `PRAGMA table_info(appointments)` — `appointments` 테이블의 열 이름, 자료형, 필수 여부 등 구조를 조회합니다.
+  - row[0] : cid, columnID
+  - row[1] : name, columnName
+  - row[2] : type, datatype
+  - row[3] : notnull, 1: not null 설정, 0: null 허용
+  - row[4] : dflt_vale, default값 
+  - row[5] : pk, primary key
 - `row[1]`, `row[2]`, `row[3]` — `PRAGMA table_info` 결과에서 각각 열 이름, 자료형, `NOT NULL` 여부를 꺼냅니다.
 - `SELECT ... FROM appointments` — 확인에 필요한 열만 선택합니다.
 - `ORDER BY appt_id` — 예약 ID를 오름차순으로 정렬합니다. `ASC`가 생략된 형태입니다.
@@ -302,6 +308,12 @@ ORDER BY avg_wait DESC
 - `ROUND(..., 1)` — 평균을 소수점 첫째 자리까지 반올림합니다.
 - `MIN`, `MAX` — 병원별 최소·최대 대기시간을 구합니다.
 - `ORDER BY avg_wait DESC` — 계산된 별칭 `avg_wait`을 기준으로 내림차순 정렬합니다.
+
+* 코드 해석 순서 
+1. FROM : 어디서 가져올까? 
+2. GROUP BY : 무엇을 기준으로 묶을까? 
+3. SELECT : 각 그룹에서 무엇을 계산해서 보여줄까? 
+4. ORDER BY : 최종 결과를 어떻게 정렬할까? 
 
 ### 예제 9. 조건부 집계
 
