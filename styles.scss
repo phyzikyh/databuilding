@@ -317,6 +317,28 @@ h1.title, .quarto-title h1 { font-weight: 800; }
 // 소제목 밑줄에 옅은 청록 — 무채색 회색선 대체
 h2 { border-bottom: 2px solid #d8f0e8; }
 
+// 강의 소개(index) 표만 무채색으로 — [::: {.plain-table}] 로 감싼 표
+.plain-table table thead th,
+.plain-table .table thead th,
+.plain-table thead th {
+  background: #fff !important;
+  color: #16181d !important;
+  border-top: 1px solid #cfd6dd !important;
+  border-bottom: 2px solid #333 !important;
+}
+.plain-table table tbody tr:nth-child(even) td,
+.plain-table .table tbody tr:nth-child(even) td,
+.plain-table tbody tr:nth-child(even) td { background: #fff !important; }
+.plain-table table tbody tr:hover td,
+.plain-table .table tbody tr:hover td,
+.plain-table tbody tr:hover td { background: #fff !important; }
+.plain-table table tbody tr td,
+.plain-table .table tbody tr td,
+.plain-table tbody tr td { border-bottom: 1px solid #e6e9ee !important; }
+.plain-table table tbody tr:last-child td,
+.plain-table .table tbody tr:last-child td,
+.plain-table tbody tr:last-child td { border-bottom: 1px solid #cfd6dd !important; }
+
 // ── Mermaid 다이어그램 채색(neutral 회색 → 브랜드 청록) ──
 // 렌더 후 SVG는 pre.mermaid 래퍼 없이 svg#mermaid-N 로 남으므로 id 접두로 겨냥
 svg[id^="mermaid-"] g.node rect,
