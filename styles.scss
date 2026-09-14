@@ -302,17 +302,18 @@ h1.title, .quarto-title h1 { font-weight: 800; }
 //  색 보강 — 브랜드 청록(#1AB18B) 팔레트로 표·다이어그램에 생기
 // ══════════════════════════════════════════════════════════
 
-// 표 머리행 — 청록 톤 배경 + 강조 괘선, 짝수행 옅은 청록 줄무늬
+// 표 — 무채색(칸 배경색 없음) + 학술풍 검은 상하 괘선, 줄무늬 없음
 // (Bootstrap 표 스타일이 특이도로 덮으므로 클래스 + !important 로 겨냥)
 .table thead th, table thead th {
-  background: #e3f5ee !important;
-  color: #0f5f4a !important;
-  border-top: 2px solid #1AB18B !important;
-  border-bottom: 2px solid #1AB18B !important;
+  background: transparent !important;
+  color: #16181d !important;
+  border-top: 2px solid #333 !important;
+  border-bottom: 1px solid #333 !important;
 }
-.table tbody tr:nth-child(even) td, table tbody tr:nth-child(even) td { background: #f4fbf9 !important; }
-.table tbody tr:hover td, table tbody tr:hover td { background: #eafaf4 !important; }
-.table tbody tr:last-child td, table tbody tr:last-child td { border-bottom: 2px solid #1AB18B !important; }
+.table tbody tr td, table tbody tr td { background: transparent !important; }
+.table tbody tr:nth-child(even) td, table tbody tr:nth-child(even) td { background: transparent !important; }
+.table tbody tr:hover td, table tbody tr:hover td { background: transparent !important; }
+.table tbody tr:last-child td, table tbody tr:last-child td { border-bottom: 2px solid #333 !important; }
 
 // 소제목 밑줄에 옅은 청록 — 무채색 회색선 대체
 h2 { border-bottom: 2px solid #d8f0e8; }
