@@ -2,31 +2,39 @@
 
 ## 데이터 준비
 
-주제는 "중고차 매물 데이터"입니다. 아래 코드는 **현실적인 매물 120건**을 만들어 `usedcar.db`에 저장합니다. `random.seed(42)` 덕분에 누구나 **같은 데이터**를 얻습니다. 실제 데이터처럼 **결측·이상값**이 섞여 있습니다.
+실습 데이터셋은 **중고차 매물 데이터 120건**입니다. `sqlite3` 라이브러리를 통해 로컬 데이터베이스(`usedcar.db`)에 테이블을 생성하고 데이터를 적재합니다.
 
 ```python
 import sqlite3, random
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 random.seed(42)
 
-conn = sqlite3.connect("usedcar.db"); cur = conn.cursor()
+conn = sqlite3.connect("usedcar.db")
+cur = conn.cursor()
 cur.execute("DROP TABLE IF EXISTS cars")
 cur.execute("""CREATE TABLE cars(
     car_id  INTEGER PRIMARY KEY,
-    brand   TEXT, model TEXT, year INTEGER,
+    brand   TEXT, 
+    model   TEXT, 
+    year    INTEGER,
     mileage INTEGER,          -- 주행거리(km)
-    fuel    TEXT,
-    price   INTEGER            -- 가격(만원)
+    fuel    TEXT,             -- 연료 타입
+    price   INTEGER           -- 가격(만원, 회귀 타깃 변수)
 )""")
 
-brands = {                    # 브랜드: (모델목록, 가격 프리미엄 계수)
-    "현대":   (["아반떼","쏘나타","그랜저","투싼"], 1.00),
-    "기아":   (["K5","스포티지","쏘렌토","모닝"],   0.95),
-    "제네시스":(["G70","G80","GV70"],              1.80),
-    "BMW":    (["3시리즈","5시리즈","X3"],          2.20),
-    "벤츠":   (["C클래스","E클래스","GLC"],         2.40),
-    "쉐보레": (["스파크","말리부","트레일블레이저"], 0.80),
+brands = {
+    "현대":   (["아반떼", "쏘나타", "그랜저", "투싼"], 1.00),
+    "기아":   (["K5", "스포티지", "쏘렌토", "모닝"],   0.95),
+    "제네시스":(["G70", "G80", "GV70"],              1.80),
+    "BMW":    (["3시리즈", "5시리즈", "X3"],          2.20),
+    "벤츠":   (["C클래스", "E클래스", "GLC"],         2.40),
+    "쉐보레": (["스파크", "말리부", "트레일블레이저"], 0.80),
 }
-fuels = ["가솔린","디젤","하이브리드","전기"]
+fuels = ["가솔린", "디젤", "하이브리드", "전기"]
 
 rows = []
 for cid in range(1, 121):
@@ -36,143 +44,283 @@ for cid in range(1, 121):
     year  = random.randint(2012, 2024)
     age   = 2026 - year
     mileage = max(1000, int(random.gauss(age * 13000, 8000)))
-    base  = 3200 - age * 230                       # 연식이 오래될수록 싸짐
+    base  = 3200 - age * 230
     price = max(200, int((base + random.gauss(0, 300)) * premium))
     fuel  = random.choice(fuels)
     rows.append([cid, brand, model, year, mileage, fuel, price])
 
-# 현실적 결함 주입(결측·이상값) — 특정 매물에 고정
+# 현실적 결함 주입
 for r in rows:
-    if r[0] in {17, 58, 93}: r[6] = None    # 가격 결측 3건
+    if r[0] in {17, 58, 93}: r[6] = None    # 가격(타깃) 결측 3건
     if r[0] in {24, 71}:     r[4] = None    # 주행거리 결측 2건
-rows[39][3] = 1900                          # car_id 40: 연식 오타(1900)
-rows[11][6] = 99999                         # car_id 12: 가격 이상값
+rows[39][3] = 1900                          # car_id 40: 연식 도메인 오류(1900년)
+rows[11][6] = 99999                         # car_id 12: 가격 극단치(99,999만원)
 
 cur.executemany("INSERT INTO cars VALUES (?,?,?,?,?,?,?)", rows)
 conn.commit()
 print("적재 완료:", cur.execute("SELECT COUNT(*) FROM cars").fetchone()[0], "건")
 ```
 
-이번 주의 중심은 **SQL로 데이터를 진단하는 것**입니다. 파이썬은 결과를 받아 출력하는 역할만 하고, 규모·완전성·요약·유효성·분포를 모두 SQL로 살펴봅니다.
+---
 
 ## 예제 코드
 
-### 예제 1. 규모 파악
+> **분석 목적 (Problem Definition)**: 중고차 매물의 제반 특성(브랜드, 연식, 주행거리, 연료)을 활용해 **'중고차 가격(`price`, 연속형 수치 타깃)'**을 예측하는 회귀 모델을 구축하기 전, 데이터의 품질과 분포 특성을 완벽히 진단합니다.
+
+---
+
+### 예제 1. DB 로드 및 기본 구조 파악 (`shape`, `info`, `dtypes`, 메모리)
+
+데이터베이스 엔진에서 필요한 테이블을 SQL로 추출하여 Pandas DataFrame으로 변환합니다.
 
 ```python
-print(cur.execute("SELECT COUNT(*), COUNT(DISTINCT brand) FROM cars").fetchone())
+# 1. SQLite에서 Pandas 데이터프레임으로 로드
+df = pd.read_sql("SELECT * FROM cars", conn)
+
+# 2. 데이터 규모 및 구조 파악
+print("데이터 규모 (행, 열):", df.shape)
+print("\n--- 데이터프레임 요약 정보 (Dtype, 결측, 메모리) ---")
+df.info()
+
+# 3. 기본키(PK) 유일성(Uniqueness) 검사
+dup_pk = df['car_id'].duplicated().sum()
+print("\n기본키(car_id) 중복 건수:", dup_pk)
 ```
 
-`COUNT(*)`은 전체 건수, `COUNT(DISTINCT brand)`은 서로 다른 브랜드의 수(고유값 개수)입니다.
+`pd.read_sql()`을 통해 DB 연계를 단 한 줄로 수행합니다. `df.info()`는 각 열의 데이터 타입과 Non-Null 카운트, 메모리 점유량을 출력합니다. 식별자(`car_id`)의 중복 건수가 0건임을 확인하여 **유일성(Uniqueness)**을 검증합니다.
 
-### 예제 2. 완전성: 결측 개수
+---
+
+### 예제 2. 완전성(Completeness) 진단: 열별 결측 건수 및 결측률(%)
 
 ```python
-for col in ["mileage", "price"]:
-    m = cur.execute(f"SELECT COUNT(*) FROM cars WHERE {col} IS NULL").fetchone()[0]
-    print(f"{col}: {m}건")
+null_counts = df.isnull().sum()
+null_ratios = (df.isnull().mean() * 100).round(1)
+
+missing_df = pd.DataFrame({
+    '결측건수': null_counts,
+    '결측률(%)': null_ratios
+})
+print("--- 열별 결측치 현황 ---")
+print(missing_df[missing_df['결측건수'] > 0])
 ```
 
-결측은 `= NULL`이 아니라 `IS NULL`로 판별합니다. (mileage 2건, price 3건)
+`df.isnull().sum()`으로 절대 결측 건수를, `mean() * 100`으로 결측률을 계산합니다. 가격(타깃) 결측이 3건(2.5%), 주행거리 결측이 2건(1.7%) 발견되었습니다. 타깃 변수의 결측치는 지도학습의 정답 레이블이 없는 상태이므로 후속 정제 단계에서 삭제(Drop) 대상이 됩니다.
 
-### 예제 3. 요약 통계: 브랜드별 평균가
+---
+
+### 예제 3. 도메인 유효성(Validity) 검증: 업무 규칙 위반 데이터 탐색
+
+단순 요약 통계량으로 포착되지 않는 비정상적 도메인 위반 데이터를 논리 조건으로 필터링합니다.
 
 ```python
-for row in cur.execute("""
-    SELECT brand, COUNT(*), ROUND(AVG(price))
-    FROM cars GROUP BY brand ORDER BY AVG(price) DESC"""):
-    print(row)
+# 도메인 규칙: 연식은 2010년 이상이어야 하며, 가격은 0원보다 커야 함
+invalid_cars = df[(df['year'] < 2010) | (df['price'] <= 0)]
+print("도메인 규칙 위반 매물 건수:", len(invalid_cars))
+print(invalid_cars[['car_id', 'brand', 'model', 'year', 'price']])
 ```
 
-`GROUP BY`로 브랜드끼리 묶고 `AVG`로 평균가를 구합니다. `AVG`·`COUNT`는 NULL을 자동으로 제외합니다.
+`car_id = 40`인 매물에서 연식이 `1900`으로 입력된 명백한 오타(입력 오류)가 적발되었습니다. 이러한 유효성 결함은 통계적 이상치이기 이전에 수집 시스템의 버그이므로 정제 명세서에 기록하고 보정해야 합니다.
 
-### 예제 4. 최소·최대·평균 함께 보기
+---
+
+### 예제 4. 타깃 변수(`price`) 단변량 분석: 기술통계량과 왜도(Skewness)
+
+회귀 모델의 핵심 종속변수인 가격(`price`)의 기술통계량을 산출하고, 분포의 중심과 치우침을 진단합니다.
 
 ```python
-for row in cur.execute("""
-    SELECT brand, MIN(price), ROUND(AVG(price)), MAX(price)
-    FROM cars WHERE price < 99999
-    GROUP BY brand ORDER BY AVG(price) DESC"""):
-    print(row)
+clean_price = df['price'].dropna()
+
+print("--- 가격(price) 기술통계량 요약 ---")
+print(clean_price.describe().round(1))
+
+mean_val = clean_price.mean()
+median_val = clean_price.median()
+skew_val = clean_price.skew()
+
+print(f"\n산술평균: {mean_val:.1f}만원")
+print(f"중앙값:   {median_val:.1f}만원")
+print(f"왜도(Skewness): {skew_val:.2f}")
 ```
 
-`MIN`·`AVG`·`MAX`를 함께 보면 값이 어느 범위에 퍼져 있는지 감이 잡힙니다. 이상값(99999)은 미리 제외했습니다.
+평균(5,761.3만 원)이 중앙값(1,184.0만 원)보다 거의 5배나 높습니다. 왜도(Skewness)가 `10.26`으로 극심한 양의 왜도(오른쪽 긴 꼬리 분포)를 띱니다. 이는 소수의 극단적 고액 이상치가 전체 평균을 비정상적으로 왜곡하고 있음을 나타냅니다.
 
-### 예제 5. 유효성: 범위를 벗어난 값
+---
+
+### 예제 5. 시각화 도구 1: 타깃 분포 시각화 (`histplot`, `KDE`, `boxplot`)
+
+수치적 요약 뒤에 가려진 실제 형태를 `seaborn` 라이브러리로 시각화합니다.
 
 ```python
-for row in cur.execute("SELECT car_id, brand, year FROM cars WHERE year < 2010 OR year > 2026"):
-    print("연식 이상:", row)
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+# 1. 히스토그램과 커널 밀도 추정(KDE)
+sns.histplot(clean_price, kde=True, ax=axes[0], color='steelblue')
+axes[0].set_title("가격 분포 (Histogram & KDE)")
+axes[0].set_xlabel("가격(만원)")
+
+# 2. 상자그림 (Boxplot)
+sns.boxplot(x=clean_price, ax=axes[1], color='lightcoral')
+axes[1].set_title("가격 상자그림 (Boxplot)")
+axes[1].set_xlabel("가격(만원)")
+
+plt.tight_layout()
+plt.show()
 ```
 
-값이 존재하지만 상식 범위(2010~2026)를 벗어난 것은 **유효성** 문제입니다. car_id 40의 `1900`이 잡힙니다.
+히스토그램에서 대다수 데이터는 5,000만 원 미만에 밀집되어 있으나, 상자그림 우측 끝(99,999만 원 지점)에 극단치 점이 뚜렷하게 돌출되어 있는 것을 시각적으로 확인할 수 있습니다.
 
-### 예제 6. HAVING: 집계 결과 거르기
+---
+
+### 예제 6. 이상치 판정과 영향도 정량화: 튜키의 1.5×IQR 규칙
+
+순위 기반의 사분위수($Q_1, Q_3$)를 산출하여 극단치에 왜곡되지 않는 이상치 기준선(Fences)을 수립합니다.
 
 ```python
-for row in cur.execute("""
-    SELECT brand, ROUND(AVG(price)) FROM cars
-    GROUP BY brand HAVING AVG(price) >= 3000
-    ORDER BY AVG(price) DESC"""):
-    print(row)
+q1 = clean_price.quantile(0.25)
+q3 = clean_price.quantile(0.75)
+iqr = q3 - q1
+
+lower_fence = q1 - 1.5 * iqr
+upper_fence = q3 + 1.5 * iqr
+
+print(f"Q1: {q1:.1f}, Q3: {q3:.1f}, IQR: {iqr:.1f}")
+print(f"정상 범위 상한선: {upper_fence:.1f}만원")
+
+# 이상치 식별
+outliers = df[df['price'] > upper_fence]
+print("\n--- IQR 기준 이상치 목록 ---")
+print(outliers[['car_id', 'brand', 'model', 'price']])
+
+# 이상치 제거 전후의 평균 왜곡 격차 정량화
+mean_with_outlier = clean_price.mean()
+mean_without_outlier = clean_price[clean_price <= upper_fence].mean()
+print(f"\n이상치 포함 평균: {mean_with_outlier:.1f}만원")
+print(f"이상치 제외 평균: {mean_without_outlier:.1f}만원")
+print(f"왜곡 오차: {mean_with_outlier - mean_without_outlier:.1f}만원")
 ```
 
-개별 행을 거르는 `WHERE`와 달리, **그룹 집계 결과**를 거를 때는 `HAVING`을 씁니다.
+상한선(6,661만 원)을 초과하는 이상치(`car_id = 12, 99999만원`) 단 1건으로 인해 전체 평균이 무려 4,393만 원이나 부풀려져 있음을 객관적 수치로 증명했습니다.
 
-### 예제 7. 조건부 집계
+---
+
+### 예제 7. 범주형 피처 탐색: 빈도, 점유율, 클래스 불균형 (`countplot`)
+
+범주형 독립변수(`brand`)의 고유값 수(카디널리티)와 범주별 점유율을 파악합니다.
 
 ```python
-print(cur.execute("""
-    SELECT ROUND(AVG(CASE WHEN fuel='전기' THEN price END)),
-           ROUND(AVG(price))
-    FROM cars""").fetchone())
+print("브랜드 종류 수 (카디널리티):", df['brand'].nunique())
+brand_counts = df['brand'].value_counts()
+brand_ratios = (df['brand'].value_counts(normalize=True) * 100).round(1)
+
+brand_df = pd.DataFrame({'매물수': brand_counts, '점유율(%)': brand_ratios})
+print("\n--- 브랜드별 빈도 및 점유율 ---")
+print(brand_df)
+
+# 범주형 빈도 막대그래프 시각화
+plt.figure(figsize=(8, 4))
+sns.countplot(data=df, x='brand', order=brand_counts.index, palette='Blues_r')
+plt.title("브랜드별 매물 빈도 분포")
+plt.xlabel("브랜드")
+plt.ylabel("매물 수")
+plt.show()
 ```
 
-`AVG(CASE WHEN 조건 THEN 값 END)`은 조건을 만족하는 행만 골라 평균을 냅니다. 전기차 평균가와 전체 평균가를 나란히 비교합니다.
+카디널리티가 6개로 적절하며, 특정 범주로의 극단적 쏠림(클래스 불균형) 없이 비교적 균등하게 표본이 분포되어 있음을 확인합니다.
 
-### 예제 8. 서브쿼리: 기준값과 비교
+---
+
+### 예제 8. 다변량 분석 1: 범주 × 범주 2차원 교차표 (`crosstab`)
+
+브랜드(행)와 연료 타입(열) 간의 결합 분포를 피벗 테이블 형태로 분석합니다.
 
 ```python
-n = cur.execute("""SELECT COUNT(*) FROM cars
-                   WHERE price > (SELECT AVG(price) FROM cars)""").fetchone()[0]
-print("전체 평균가 초과 매물:", n, "건")
+# 빈도 기준 2차원 교차표
+ct_freq = pd.crosstab(df['brand'], df['fuel'])
+print("--- 브랜드 x 연료타입 교차 빈도표 ---")
+print(ct_freq)
+
+# 행 기준 비율(%) 교차표
+ct_ratio = pd.crosstab(df['brand'], df['fuel'], normalize='index').round(3) * 100
+print("\n--- 브랜드별 연료 포트폴리오 비중(%) ---")
+print(ct_ratio)
 ```
 
-괄호 안 서브쿼리가 전체 평균을 먼저 계산하고, 바깥 쿼리가 그 값과 각 행을 비교합니다.
+`pd.crosstab()`을 사용하면 SQL의 복잡한 조건부 집계 없이 단 한 줄로 분할표를 작성할 수 있습니다. 각 브랜드가 전기/하이브리드 등 친환경차와 내연기관차를 어떤 비율로 보유하고 있는지 입체적으로 파악합니다.
 
-### 예제 9. CASE로 구간화해 분포 보기
+---
+
+### 예제 9. 다변량 분석 2: 피처와 타깃의 관계 (`groupby`, `boxplot`, `scatterplot`, `corr`)
+
+독립변수들이 타깃 가격(`price`)에 어떤 영향을 미치는지 다각도로 탐색합니다(이상치 `99999`는 제외 후 분석).
 
 ```python
-for row in cur.execute("""
-    SELECT CASE WHEN price < 1500 THEN 'A(~1500)'
-                WHEN price < 3000 THEN 'B(1500~3000)'
-                ELSE 'C(3000~)' END AS band,
-           COUNT(*), ROUND(AVG(mileage))
-    FROM cars WHERE price IS NOT NULL AND price < 99999
-    GROUP BY band ORDER BY band"""):
-    print(row)
+# 이상치를 제외한 정상 매물 분석 데이터셋
+normal_df = df[(df['price'].notnull()) & (df['price'] <= upper_fence)].copy()
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# 1. 범주형 x 수치형 타깃: 브랜드별 가격 상자그림
+sns.boxplot(data=normal_df, x='brand', y='price', ax=axes[0], palette='Set3')
+axes[0].set_title("브랜드별 정상 가격 분포 (Boxplot)")
+
+# 2. 수치형 x 수치형 타깃: 주행거리와 가격의 산점도
+sns.scatterplot(data=normal_df, x='mileage', y='price', hue='brand', ax=axes[1])
+axes[1].set_title("주행거리 vs 가격 산점도 (Scatter Plot)")
+
+plt.tight_layout()
+plt.show()
+
+# 3. 수치형 변수 간 피어슨 상관계수 행렬
+corr_matrix = normal_df[['year', 'mileage', 'price']].corr().round(3)
+print("--- 수치형 상관계수 행렬 ---")
+print(corr_matrix)
 ```
 
-`CASE`로 연속형 가격을 구간(범주)으로 바꾼 뒤 `GROUP BY` 하면 분포와 변수 관계를 한눈에 볼 수 있습니다.
+브랜드별 상자그림을 통해 벤츠, 제네시스 등 프리미엄 브랜드의 가격대가 일반 브랜드 대비 높게 형성되어 있음을 확인합니다. 주행거리와 가격 사이에는 음의 상관관계($r = -0.63$)가 뚜렷하게 관찰되며, 연식과는 강한 양의 상관관계($r = 0.72$)를 나타냅니다.
 
-### 예제 10. SQL로 어려운 계산은 파이썬으로 (IQR)
+---
+
+### 예제 10. 고급 전처리 방향 도출 및 정제 명세서 수립 (로그 변환, 스케일링, 인코딩, 파생변수)
+
+EDA 진단 결과를 머신러닝 전처리 파이프라인으로 연결하는 핵심 전략을 수립합니다.
 
 ```python
-import statistics
-p = [r[0] for r in cur.execute("SELECT price FROM cars WHERE price IS NOT NULL ORDER BY price")]
-q1, q2, q3 = statistics.quantiles(p, n=4)
-upper = q3 + 1.5 * (q3 - q1)
-print("가격 상한:", round(upper), "이상값:", [x for x in p if x > upper])
+# 1. 로그 변환 (Log Transformation) 효과 검증
+# 우측으로 꼬리가 긴 타깃 가격에 log1p(ln(1+x)) 변환 적용
+log_price = np.log1p(normal_df['price'])
+print(f"변환 전 가격 왜도: {normal_df['price'].skew():.2f}")
+print(f"로그 변환 후 왜도: {log_price.skew():.2f} (정규분포에 근접)")
+
+# 2. 파생변수(Feature Engineering) 생성
+normal_df['vehicle_age'] = 2026 - normal_df['year']              # 차량 나이
+normal_df['annual_mileage'] = normal_df['mileage'] / normal_df['vehicle_age'] # 연평균 주행거리
+print("\n--- 파생변수 생성 결과 샘플 ---")
+print(normal_df[['brand', 'model', 'vehicle_age', 'annual_mileage', 'price']].head(3))
 ```
 
-SQLite에는 사분위수·표준편차 함수가 기본으로 없습니다. IQR 기반 이상값처럼 SQL로 표현하기 어려운 계산만 파이썬으로 처리합니다. car_id 12의 `99999`가 이상값으로 잡힙니다.
+#### EDA 결과 기반 최종 데이터 정제 명세서 (Data Cleaning Specification)
+
+| 진단 항목 | EDA 발견 결함 내용 | 후속 전처리 조치 명세 |
+|---|---|---|
+| **타깃 결측치** | `price IS NULL` (3건) | 지도학습 학습셋에서 해당 3행 완전 삭제 (`dropna(subset=['price'])`) |
+| **피처 결측치** | `mileage IS NULL` (2건) | 차량 연식별 평균 주행거리로 대체(Imputation) |
+| **도메인 유효성** | 연식 오타 (`year = 1900`, 1건) | `year = 2020`으로 수동 교정 또는 이상 레코드 제거 |
+| **통계적 이상치** | 극단가 매물 (`price = 99999`, 1건) | 상한 울타리(6,661만 원) 초과치로 분류하여 제거 |
+| **타깃 비대칭성** | 가격 왜도 완화 필요 | 모델 학습 시 타깃에 `np.log1p` 로그 변환 적용 |
+| **스케일 불일치** | 주행거리(수만 단위) vs 연식(수천 단위) | 거리 기반 알고리즘을 위해 `StandardScaler` 적용 |
+| **범주형 피처** | `fuel`(4종), `brand`(6종) | 카디널리티가 낮으므로 원-핫 인코딩(`pd.get_dummies`) 적용 |
+| **파생변수** | 연식과 주행거리의 비선형 결합 | `vehicle_age`, `annual_mileage` 특성 생성 |
+
+---
 
 ## 코드 문제
 
-주제는 "직원 데이터"입니다. 아래 문제용 데이터를 먼저 실행한 뒤, 각 문제의 예상 결과와 비교하며 풉니다.
+주제는 **"사내 직원 데이터셋 (`employees.db`, 90건)"**입니다. 회귀 모델의 타깃 변수인 **직원 급여(`salary`, 만원)**를 중심으로, 예제에서 학습한 EDA 파이프라인을 직접 수행하세요.
+
+### 실습 데이터 적재
 
 ```python
-import random
 random.seed(7)
 
 depts = ["개발", "영업", "인사", "디자인", "마케팅"]
@@ -186,208 +334,249 @@ for eid in range(1, 91):
     salary = max(2800, int(base[dept] + years * 90 + random.gauss(0, 300)))
     emp_rows.append([eid, f"직원{eid:02d}", dept, age, years, salary])
 
-for r in emp_rows:                       # 현실적 결함
-    if r[0] in {13, 44, 77}: r[5] = None  # 급여 결측 3건
+# 결함 주입
+for r in emp_rows:
+    if r[0] in {13, 44, 77}: r[5] = None  # 급여(타깃) 결측 3건
     if r[0] in {29, 61}:     r[3] = None  # 나이 결측 2건
-emp_rows[7][3] = 150                      # 나이 이상값
-emp_rows[22][5] = 12000                   # 급여 이상값
+emp_rows[7][3] = 150                      # 나이 도메인 오류 (150세)
+emp_rows[22][5] = 12000                   # 급여 극단치 (12,000만원)
 
 cur.execute("DROP TABLE IF EXISTS employees")
 cur.execute("""CREATE TABLE employees(
-    eid INTEGER PRIMARY KEY, name TEXT, dept TEXT,
-    age INTEGER, years INTEGER, salary INTEGER)""")
+    eid INTEGER PRIMARY KEY, 
+    name TEXT, 
+    dept TEXT,
+    age INTEGER, 
+    years INTEGER, 
+    salary INTEGER
+)""")
 cur.executemany("INSERT INTO employees VALUES (?,?,?,?,?,?)", emp_rows)
 conn.commit()
+print("직원 데이터 적재 완료:", cur.execute("SELECT COUNT(*) FROM employees").fetchone()[0], "명")
 ```
 
-**문제 1.** 전체 직원 수와 **부서 종류 수**를 한 번의 쿼리로 출력하세요.
+---
 
-- 사용할 것: `COUNT(*)`, `COUNT(DISTINCT dept)`
-- 예상 결과: 90명, 5개 부서.
+**문제 1.** `employees` 테이블을 Pandas 데이터프레임 `df_emp`로 로드하고, **행/열 수, 각 열의 Dtype, 메모리 사용량, 그리고 기본키(`eid`)의 중복 여부**를 출력하세요.
+
+- 사용할 것: `pd.read_sql()`, `df_emp.shape`, `df_emp.info()`, `df_emp['eid'].duplicated().sum()`
 
 ```python
-# TODO: 전체 인원과 부서 종류 수를 출력하세요.
+# TODO: 데이터프레임 로드 및 구조, PK 중복 여부를 확인하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-print(cur.execute("SELECT COUNT(*), COUNT(DISTINCT dept) FROM employees").fetchone())
+df_emp = pd.read_sql("SELECT * FROM employees", conn)
+print("데이터 규모:", df_emp.shape)
+df_emp.info()
+print("기본키(eid) 중복 건수:", df_emp['eid'].duplicated().sum())
 ```
-`COUNT(DISTINCT dept)`가 서로 다른 부서의 개수를 셉니다.
+90행 6열의 구조를 확인하고, 식별자의 중복이 0건임을 검증하여 데이터의 유일성을 확인합니다.
 :::
 
-**문제 2.** `salary`와 `age`의 **결측 개수**를 각각 출력하세요.
+---
 
-- 사용할 것: `WHERE ... IS NULL`
-- 예상 결과: 급여 3건, 나이 2건.
+**문제 2.** `df_emp`의 각 열별 **결측치 건수와 결측률(%)**을 하나의 데이터프레임으로 요약하여 결측치가 존재하는 열만 출력하세요.
+
+- 사용할 것: `df_emp.isnull().sum()`, `(df_emp.isnull().mean() * 100).round(1)`
 
 ```python
-# TODO: 결측 개수를 각각 출력하세요.
+# TODO: 열별 결측 건수 및 결측률(%) 요약표를 작성하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-for col in ["salary", "age"]:
-    m = cur.execute(f"SELECT COUNT(*) FROM employees WHERE {col} IS NULL").fetchone()[0]
-    print(f"{col} 결측: {m}건")
+null_cnt = df_emp.isnull().sum()
+null_pct = (df_emp.isnull().mean() * 100).round(1)
+missing_summary = pd.DataFrame({'결측건수': null_cnt, '결측률(%)': null_pct})
+print(missing_summary[missing_summary['결측건수'] > 0])
 ```
-결측은 `IS NULL`로 판별합니다.
+급여(타깃) 결측 3건(3.3%), 나이 결측 2건(2.2%)을 식별합니다. 타깃 결측치는 지도학습 학습 시 행 삭제(Listwise Deletion) 대상이 됩니다.
 :::
 
-**문제 3.** **부서별** 인원과 평균 급여를 평균 급여가 높은 순으로 출력하세요.
+---
 
-- 사용할 것: `GROUP BY`, `AVG`, `ROUND`, `ORDER BY`
+**문제 3.** 근무 가능한 정상 연령대인 **20세 이상 65세 이하를 벗어난 도메인 유효성 위반 레코드**를 필터링하여 출력하세요.
+
+- 사용할 것: 불린 인덱싱 `(df_emp['age'] < 20) | (df_emp['age'] > 65)`
 
 ```python
-# TODO: 부서별 인원·평균 급여를 출력하세요.
+# TODO: 도메인 업무 규칙을 위반한 비정상 나이 데이터를 조회하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-for row in cur.execute("""
-    SELECT dept, COUNT(*), ROUND(AVG(salary))
-    FROM employees GROUP BY dept ORDER BY AVG(salary) DESC"""):
-    print(row)
+invalid_age = df_emp[(df_emp['age'] < 20) | (df_emp['age'] > 65)]
+print("도메인 규칙 위반 직원 목록:")
+print(invalid_age[['eid', 'name', 'dept', 'age', 'salary']])
 ```
-`GROUP BY dept`로 묶고 `AVG(salary)`로 평균을 냅니다. 급여 결측은 자동 제외됩니다.
+`eid = 8`인 직원의 나이가 `150세`로 입력된 명백한 시스템 입력 오류를 적발합니다.
 :::
 
-**문제 4.** 부서별 **최소·평균·최대 급여**를 함께 출력하세요(급여 이상값 12000은 제외).
+---
 
-- 사용할 것: `MIN`, `AVG`, `MAX`, `WHERE salary < 12000`
+**문제 4.** 타깃 변수인 **급여(`salary`)의 결측치를 제외한 5대 요약 통계량, 평균, 중앙값, 왜도(Skewness)**를 산출하세요.
+
+- 사용할 것: `describe()`, `mean()`, `median()`, `skew()`
 
 ```python
-# TODO: 부서별 급여의 MIN·AVG·MAX를 출력하세요.
+# TODO: 타깃 급여의 기초 통계량과 왜도를 계산하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-for row in cur.execute("""
-    SELECT dept, MIN(salary), ROUND(AVG(salary)), MAX(salary)
-    FROM employees WHERE salary < 12000
-    GROUP BY dept ORDER BY AVG(salary) DESC"""):
-    print(row)
+clean_sal = df_emp['salary'].dropna()
+print(clean_sal.describe().round(1))
+print(f"평균 급여:   {clean_sal.mean():.1f}만원")
+print(f"중앙값 급여: {clean_sal.median():.1f}만원")
+print(f"왜도(Skewness): {clean_sal.skew():.2f}")
 ```
-최소·평균·최대를 함께 보면 급여가 어느 범위에 퍼져 있는지 알 수 있습니다.
+극단치(12,000만 원)로 인해 평균(4,657만 원)이 중앙값(4,528만 원)보다 높게 산출되며 양의 왜도(3.89)를 보입니다.
 :::
 
-**문제 5.** 나이(`age`)가 **20~65 범위를 벗어난** 이상값을 찾아 `eid`, `age`를 출력하세요.
+---
 
-- 예상 결과: eid 8의 `150`이 잡힙니다.
+**문제 5.** 타깃 변수인 급여(`salary`)의 분포를 **`sns.histplot(..., kde=True)`**와 **`sns.boxplot(...)`**으로 나란히 시각화하세요.
 
 ```python
-# TODO: 나이 범위 밖 값을 찾으세요.
+# TODO: 급여의 히스토그램과 상자그림을 시각화하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-for row in cur.execute("SELECT eid, age FROM employees WHERE age < 20 OR age > 65"):
-    print("나이 이상:", row)
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+sns.histplot(clean_sal, kde=True, ax=axes[0], color='teal')
+axes[0].set_title("급여 분포 (Histogram & KDE)")
+sns.boxplot(x=clean_sal, ax=axes[1], color='orange')
+axes[1].set_title("급여 상자그림 (Boxplot)")
+plt.tight_layout()
+plt.show()
 ```
-값이 존재하지만 상식 범위를 벗어난 것은 유효성 문제입니다.
+히스토그램의 커널 밀도 곡선(KDE)과 상자그림을 통해 12,000만 원 지점에 위치한 독보적인 극단치를 시각적으로 확인합니다.
 :::
 
-**문제 6.** 평균 급여가 **4500 이상인 부서만** 골라 평균 급여와 함께 출력하세요.
+---
 
-- 사용할 것: `GROUP BY`, `HAVING`
+**문제 6.** 튜키의 **$1.5\times\mathrm{IQR}$ 규칙**을 적용하여 급여의 정상 범위 상한선을 계산하고, 이를 초과하는 이상치 행을 출력하세요.
+
+- 공식: $Q_1 = \text{quantile}(0.25)$, $Q_3 = \text{quantile}(0.75)$, $\text{상한} = Q_3 + 1.5 \times (Q_3 - Q_1)$
 
 ```python
-# TODO: HAVING으로 평균 급여 4500 이상 부서만 출력하세요.
+# TODO: IQR 상한선을 계산하고 이상치 직원을 검출하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-for row in cur.execute("""
-    SELECT dept, ROUND(AVG(salary)) FROM employees
-    GROUP BY dept HAVING AVG(salary) >= 4500
-    ORDER BY AVG(salary) DESC"""):
-    print(row)
+q1 = clean_sal.quantile(0.25)
+q3 = clean_sal.quantile(0.75)
+iqr = q3 - q1
+upper_fence = q3 + 1.5 * iqr
+print(f"Q1: {q1:.1f}, Q3: {q3:.1f}, IQR: {iqr:.1f}, 상한선: {upper_fence:.1f}만원")
+
+sal_outliers = df_emp[df_emp['salary'] > upper_fence]
+print("\n급여 이상치 레코드:")
+print(sal_outliers[['eid', 'name', 'dept', 'years', 'salary']])
 ```
-`WHERE`는 그룹화 전 개별 행을, `HAVING`은 그룹화 후 집계 결과를 거릅니다.
+상한선 약 6,861만 원을 훌쩍 넘는 `eid = 23 (직원23, 12000만원)`이 이상치로 판정됩니다.
 :::
 
-**문제 7.** **개발 부서의 평균 급여**와 **전체 평균 급여**를 나란히 출력하세요.
+---
 
-- 사용할 것: `AVG(CASE WHEN dept='개발' THEN salary END)`
+**문제 7.** 범주형 독립변수인 **부서(`dept`)별 인원수와 점유율(%)**을 산출하고, **`sns.countplot`**으로 시각화하세요.
 
 ```python
-# TODO: 조건부 집계로 두 평균을 함께 출력하세요.
+# TODO: 부서별 인원수, 비중 산출 및 막대그래프를 시각화하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-print(cur.execute("""
-    SELECT ROUND(AVG(CASE WHEN dept='개발' THEN salary END)),
-           ROUND(AVG(salary))
-    FROM employees""").fetchone())
+dept_cnt = df_emp['dept'].value_counts()
+dept_ratio = (df_emp['dept'].value_counts(normalize=True) * 100).round(1)
+print(pd.DataFrame({'인원수': dept_cnt, '비중(%)': dept_ratio}))
+
+plt.figure(figsize=(7, 3))
+sns.countplot(data=df_emp, x='dept', order=dept_cnt.index, palette='viridis')
+plt.title("부서별 인원 분포")
+plt.show()
 ```
-`CASE`로 개발 부서 급여만 골라 평균을 내고, 전체 평균과 비교합니다.
+5개 부서의 인력 분포가 고르게 유지되고 있는지 클래스 균형 상태를 진단합니다.
 :::
 
-**문제 8.** **전체 평균 급여보다 높은** 직원의 **수**를 출력하세요.
+---
 
-- 사용할 것: 서브쿼리 `(SELECT AVG(salary) FROM employees)`
+**문제 8.** 근속연수(`years`)를 5년 미만인 **'주니어'**와 5년 이상인 **'시니어'**로 구분하는 파생 컬럼을 만들고, **부서(행) × 근속단계(열) 2차원 교차표**를 작성하세요.
+
+- 사용할 것: `np.where()`, `pd.crosstab()`
 
 ```python
-# TODO: 서브쿼리로 평균 초과 인원을 세세요.
+# TODO: 근속단계 파생 컬럼 생성 후 부서와의 교차표를 작성하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-n = cur.execute("""SELECT COUNT(*) FROM employees
-                   WHERE salary > (SELECT AVG(salary) FROM employees)""").fetchone()[0]
-print("평균 초과:", n, "명")
+df_emp['career_stage'] = np.where(df_emp['years'] < 5, '주니어(5년미만)', '시니어(5년이상)')
+ct_emp = pd.crosstab(df_emp['dept'], df_emp['career_stage'])
+print("--- 부서 x 근속단계 교차표 ---")
+print(ct_emp)
 ```
-서브쿼리가 전체 평균을 먼저 구하고, 바깥 쿼리가 각 직원과 비교합니다.
+부서별 인력 연차 구성을 2차원 매트릭스로 확인하여 각 부서의 숙련도 분포를 한눈에 비교합니다.
 :::
 
-**문제 9.** `CASE`로 급여대를 `A(~3500)`, `B(3500~4500)`, `C(4500~)`로 나눠 **구간별 인원**을 출력하세요(급여 결측 제외).
+---
 
-- 사용할 것: `CASE WHEN`, `GROUP BY`
+**문제 9.** 정상 급여 데이터(이상치 12,000 제외)에 대해 **부서별 평균 급여(`groupby`)**를 비교하고, **근속연수(`years`)와 급여 간의 피어슨 상관계수**를 구하세요.
+
+- 사용할 것: `groupby('dept')['salary'].mean()`, `corr()`
 
 ```python
-# TODO: 급여 구간별 인원을 출력하세요.
+# TODO: 부서별 평균 급여 집계 및 근속연수와 급여의 상관계수를 산출하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-for row in cur.execute("""
-    SELECT CASE WHEN salary < 3500 THEN 'A(~3500)'
-                WHEN salary < 4500 THEN 'B(3500~4500)'
-                ELSE 'C(4500~)' END AS band,
-           COUNT(*)
-    FROM employees WHERE salary IS NOT NULL
-    GROUP BY band ORDER BY band"""):
-    print(row)
+normal_emp = df_emp[(df_emp['salary'].notnull()) & (df_emp['salary'] <= upper_fence)]
+print("--- 부서별 평균 급여 ---")
+print(normal_emp.groupby('dept')['salary'].mean().round(1))
+
+print("\n--- 수치형 상관계수 행렬 ---")
+print(normal_emp[['age', 'years', 'salary']].corr().round(3))
 ```
-연속형 급여를 구간으로 바꿔 분포를 봅니다.
+개발 부서의 평균 급여가 가장 높게 집계되며, 근속연수와 급여 사이에 강한 양의 상관관계($r \approx 0.85$)가 관찰됩니다.
 :::
 
-**문제 10.** 파이썬 `statistics`로 급여의 **IQR 상한(Q3 + 1.5×IQR)** 을 구하고, 그보다 큰 급여 이상값을 출력하세요.
+---
 
-- 예상 결과: `12000`이 이상값으로 잡힙니다.
+**문제 10.** 타깃 변수인 급여(`salary`)에 **로그 변환(`np.log1p`)**을 적용하여 왜도 완화 효과를 검증하고, **결측치·이상치·스케일링·인코딩 방향을 포함한 '데이터 정제 명세서'**를 요약 정리하세요.
 
 ```python
-# TODO: statistics.quantiles로 IQR 상한을 구해 이상값을 출력하세요.
+# TODO: 로그 변환 전후 왜도를 비교하고 정제 명세서를 출력하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-import statistics
-s = [r[0] for r in cur.execute("SELECT salary FROM employees WHERE salary IS NOT NULL ORDER BY salary")]
-q1, q2, q3 = statistics.quantiles(s, n=4)
-upper = q3 + 1.5 * (q3 - q1)
-print("급여 상한:", round(upper), "이상값:", [x for x in s if x > upper])
+log_sal = np.log1p(normal_emp['salary'])
+print(f"로그 변환 전 왜도: {normal_emp['salary'].skew():.2f}")
+print(f"로그 변환 후 왜도: {log_sal.skew():.2f}")
+
+print("\n[사내 직원 데이터 정제 명세서]")
+print("1. 타깃 결측치: 급여 결측 3건 삭제 (dropna)")
+print("2. 피처 결측치: 나이 결측 2건 부서별 중앙값 대체")
+print("3. 도메인 오류: 나이 150세 레코드 1건 교정/제거")
+print("4. 통계적 이상치: 급여 12000만원 1건 모델링 분리 또는 제거")
+print("5. 피처 스케일링: age, years에 대해 StandardScaler 적용")
+print("6. 범주형 인코딩: dept(5종)에 One-Hot Encoding 적용")
+print("7. 특성 공학: annual_salary_growth = salary / (years + 1) 파생변수 생성")
 ```
-SQLite에 없는 사분위수 계산은 파이썬으로 처리합니다. "어디까지 SQL로 하고 어디서 파이썬으로 넘어갈지"를 판단하는 것도 실무 감각입니다.
+EDA를 통해 발견한 정량적 사실을 바탕으로 후속 머신러닝 전처리 파이프라인의 명확한 실행 지침(정제 명세서)을 완성합니다.
 :::
