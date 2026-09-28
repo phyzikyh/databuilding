@@ -1,38 +1,68 @@
 # 8주차 코딩실습
 
-## 예제 코드
+## 데이터 준비
 
-주제는 "여러 지점의 커피 판매"입니다. 지저분한 원천을 깨끗한 프로덕션 데이터로 만드는 전 과정을 하나의 스크립트로 구현합니다.
+주제는 "여러 지점의 커피 판매"입니다. 지금까지 배운 수집·적재·정제·검증·프로덕션 적재·리포트를 **각각 하나의 함수**로 나누어(모듈화) 잇고, 검증 실패 시 되돌아가는 흐름과 멱등한 재적재까지 하나의 파이프라인으로 완성합니다. 먼저 연결 함수를 만듭니다.
 
 ```python
 import sqlite3
 
 def get_conn():
     conn = sqlite3.connect("pipeline.db")
-    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA foreign_keys = ON")   # 외래 키 제약을 실제로 적용
     return conn
+```
 
-# ① 수집: 원천 데이터(형식이 제각각)
+**이 코드에 쓰인 명령**
+
+- `sqlite3.connect("pipeline.db")` — 파이프라인이 사용할 데이터베이스에 연결합니다.
+- `PRAGMA foreign_keys = ON` — SQLite는 외래 키 강제가 기본으로 꺼져 있어, 연결마다 켜 줍니다.
+- 각 단계를 함수로 나누면(모듈화) 수정·시험·재사용이 쉬워집니다.
+
+## 예제 1. ① 수집 — 지저분한 원천 데이터
+
+```python
 def extract():
     return [
         (1, " 강남점 ", "아메리카노", "4500", 3),
-        (2, "강남점", "라떼", "5000", 2),
-        (3, "홍대점 ", "americano", "", 1),      # 가격 빈문자
-        (4, " 홍대점", "라떼", "5000", None),     # 수량 결측
-        (5, "강남점", "아메리카노", "-100", 2),   # 가격 이상값(음수)
-        (1, " 강남점 ", "아메리카노", "4500", 3), # 중복
+        (2, "강남점",   "라떼",       "5000", 2),
+        (3, "홍대점 ",  "americano",  "",     1),     # 가격 빈 문자열
+        (4, " 홍대점",  "라떼",       "5000", None),  # 수량 결측
+        (5, "강남점",   "아메리카노", "-100", 2),     # 가격 이상값(음수)
+        (1, " 강남점 ", "아메리카노", "4500", 3),     # 1번과 같은 중복
     ]
+```
 
-# ② 스테이징 적재(원본 그대로)
+실제 원천은 여러 문제가 한꺼번에 섞여 옵니다. 공백·표기 혼재·빈 문자열·결측·이상값·중복이 모두 들어 있습니다. 통합 실습은 이런 현실적인 데이터를 처음부터 끝까지 처리해 봅니다.
+
+**이 코드에 쓰인 개념**
+
+- `extract()` — 원천에서 데이터를 가져오는 수집 단계를 함수로 분리한 것입니다.
+- 반환값은 튜플의 리스트로, 아직 아무 가공도 하지 않은 원본입니다.
+
+## 예제 2. ② 스테이징 적재 — 원본 그대로 보존
+
+```python
 def load_staging(conn, rows):
     cur = conn.cursor()
     cur.execute("DROP TABLE IF EXISTS stg_sales")
     cur.execute("""CREATE TABLE stg_sales(
         sid INTEGER, store TEXT, item TEXT, price TEXT, qty INTEGER)""")
-    cur.executemany("INSERT INTO stg_sales VALUES (?,?,?,?,?)", rows)
+    cur.executemany("INSERT INTO stg_sales VALUES (?, ?, ?, ?, ?)", rows)
     conn.commit()
+```
 
-# ③ 정제·변환
+수집한 데이터를 가공 없이 스테이징 테이블에 그대로 넣습니다(ELT의 원본 보존). `price`를 일부러 `TEXT`로 두어, 문자열로 들어온 값을 나중에 변환하는 상황을 재현합니다.
+
+**이 코드에 쓰인 개념**
+
+- 스테이징 테이블 `stg_sales` — 원본이 처음 도착하는 임시 창고입니다.
+- `executemany` — 여러 행을 한 번에 적재합니다.
+- 원본을 보존하므로, 정제 규칙이 틀려도 언제든 다시 시작(백필)할 수 있습니다.
+
+## 예제 3. ③ 정제·변환 — 깨끗한 데이터 만들기
+
+```python
 def transform(conn):
     cur = conn.cursor()
     cur.execute("DROP TABLE IF EXISTS clean_sales")
@@ -40,148 +70,302 @@ def transform(conn):
         SELECT DISTINCT
             sid,
             TRIM(store) AS store,
-            CASE WHEN LOWER(item)='americano' THEN '아메리카노' ELSE item END AS item,
-            CAST(NULLIF(TRIM(price),'') AS INTEGER) AS price,
+            CASE WHEN LOWER(item) = 'americano' THEN '아메리카노' ELSE item END AS item,
+            CAST(NULLIF(TRIM(price), '') AS INTEGER) AS price,
             COALESCE(qty, 1) AS qty
         FROM stg_sales""")
     conn.commit()
+```
 
-# ④ 자동 검증(문제 행 세기)
+중복 제거·공백 정리·표기 표준화·타입 변환·결측 대치를 한 번에 적용해 정제본을 새 테이블로 만듭니다. 원본 `stg_sales`는 건드리지 않는 재현 가능한 정제입니다.
+
+**이 코드에 쓰인 함수**
+
+- `SELECT DISTINCT` — 완전히 같은 중복 행을 제거합니다.
+- `TRIM(store)` — 지점명 앞뒤 공백을 없앱니다.
+- `CASE WHEN LOWER(item)='americano' ...` — 영문 표기를 한글로 표준화합니다.
+- `CAST(NULLIF(TRIM(price),'') AS INTEGER)` — 빈 문자열을 NULL로 만든 뒤 정수로 변환합니다.
+- `COALESCE(qty, 1)` — 수량 결측을 1로 대치합니다.
+
+## 예제 4. ④ 자동 검증 — 문제 행 세기
+
+```python
 def validate(conn):
     cur = conn.cursor()
     tests = [
         ("가격 결측", "SELECT COUNT(*) FROM clean_sales WHERE price IS NULL", 0, "치명"),
-        ("가격 음수", "SELECT COUNT(*) FROM clean_sales WHERE price < 0", 0, "치명"),
+        ("가격 음수", "SELECT COUNT(*) FROM clean_sales WHERE price < 0",    0, "치명"),
     ]
     ok = True
-    for name, sql, th, sev in tests:
+    for name, sql, threshold, severity in tests:
         c = cur.execute(sql).fetchone()[0]
-        print(f"  [{'통과' if c<=th else '실패-'+sev}] {name}: {c}건")
-        if c > th and sev == "치명":
+        print(f"  [{'통과' if c <= threshold else '실패-'+severity}] {name}: {c}건")
+        if c > threshold and severity == "치명":
             ok = False
     return ok
+```
 
-# ④-보정: 음수·결측 가격 제거
+검증은 "문제 행의 개수를 세는 쿼리"입니다. 각 검증을 목록으로 관리하고, 치명 검증이 하나라도 실패하면 `ok=False`를 돌려줘 다음 흐름을 결정합니다.
+
+**이 코드에 쓰인 개념**
+
+- `tests` 리스트 — `(이름, SQL, 임계치, 심각도)`로 검증을 표현합니다.
+- `ok` — 치명 검증을 모두 통과했는지를 나타내는 판정 결과입니다.
+- 정제 단계에서 `-100` 같은 음수 가격이 남아 있으면 여기서 '실패-치명'으로 잡힙니다.
+
+## 예제 5. 보정과 되돌아가는 흐름
+
+```python
 def fix(conn):
     conn.execute("DELETE FROM clean_sales WHERE price IS NULL OR price < 0")
     conn.commit()
+```
 
-# ⑤ 프로덕션 적재(제약 + 업서트, 멱등)
+검증에 실패하면 무작정 진행하지 않고 보정 단계로 되돌아갑니다. 여기서는 가격이 결측이거나 음수인 행을 제거합니다. 보정 뒤 다시 검증해 통과해야 프로덕션으로 넘어갑니다.
+
+**이 코드에 쓰인 개념**
+
+- `DELETE ... WHERE 조건` — 문제 행만 골라 제거합니다.
+- "검증 실패 → 보정 → 재검증"의 되돌아가는 흐름이 통합 파이프라인의 핵심 설계입니다.
+
+## 예제 6. ⑤ 프로덕션 적재 — 제약 + 업서트(멱등)
+
+```python
 def load_production(conn):
     cur = conn.cursor()
     cur.execute("""CREATE TABLE IF NOT EXISTS sales(
-        sid INTEGER PRIMARY KEY, store TEXT NOT NULL,
-        item TEXT NOT NULL, price INTEGER CHECK(price>=0), qty INTEGER CHECK(qty>0))""")
+        sid   INTEGER PRIMARY KEY,
+        store TEXT NOT NULL,
+        item  TEXT NOT NULL,
+        price INTEGER CHECK(price >= 0),
+        qty   INTEGER CHECK(qty > 0))""")
     cur.execute("""INSERT INTO sales SELECT * FROM clean_sales WHERE TRUE
-        ON CONFLICT(sid) DO UPDATE SET price=excluded.price, qty=excluded.qty""")
+        ON CONFLICT(sid) DO UPDATE SET price = excluded.price, qty = excluded.qty""")
     conn.commit()
+```
 
-# ⑥ 산출물 리포트
+검증을 통과한 데이터만 제약 조건이 걸린 프로덕션 테이블에 담습니다. 업서트로 적재하므로, 같은 파이프라인을 다시 돌려도 중복이 쌓이지 않습니다(멱등성).
+
+**이 코드에 쓰인 개념**
+
+- 제약 조건(`NOT NULL`·`CHECK`) — 프로덕션이 마지막으로 규칙을 강제합니다.
+- `ON CONFLICT(sid) DO UPDATE` — 같은 키는 갱신, 없으면 삽입하는 업서트입니다.
+- `WHERE TRUE` — `SELECT` 뒤에 `ON CONFLICT`를 붙이기 위한 SQLite 문법상의 표시입니다.
+
+## 예제 7. ⑥ 산출물 리포트
+
+```python
 def report(conn):
     cur = conn.cursor()
     total = cur.execute("SELECT COUNT(*) FROM sales").fetchone()[0]
     print(f"\n== 산출물 리포트 ==\n최종 레코드: {total}건")
-    for store, amt in cur.execute("""SELECT store, SUM(price*qty)
+    for store, amount in cur.execute("""SELECT store, SUM(price*qty)
             FROM sales GROUP BY store ORDER BY 2 DESC"""):
-        print(f"  {store}: {amt:,}원")
+        print(f"  {store}: {amount:,}원")
+```
 
-# ---- 파이프라인 실행 ----
+파이프라인이 만든 최종 데이터를 요약해 기록으로 남깁니다. 몇 건이 남았는지, 지점별 매출은 얼마인지를 정리합니다. 이 리포트가 데이터의 품질 보증서 역할을 합니다.
+
+**이 코드에 쓰인 함수**
+
+- `SUM(price*qty)` — 지점별 매출 합계를 계산합니다.
+- `GROUP BY store ORDER BY 2 DESC` — 지점별로 묶고 매출이 큰 순으로 정렬합니다.
+- `{amount:,}` — 천 단위 쉼표를 넣어 읽기 좋게 출력합니다.
+
+## 예제 8. 파이프라인 실행과 멱등성 확인
+
+```python
 conn = get_conn()
 load_staging(conn, extract())
 transform(conn)
+
 print("1차 검증:")
 if not validate(conn):
     print("  → 검증 실패, 보정 후 재검증")
     fix(conn)
     print("2차 검증:")
     validate(conn)
+
 load_production(conn)
 report(conn)
-load_production(conn)   # 멱등성 확인: 재실행
+
+load_production(conn)   # 멱등성 확인: 다시 적재
 print("재적재 후 건수:", conn.execute("SELECT COUNT(*) FROM sales").fetchone()[0])
 conn.close()
 ```
 
-각 함수가 어느 주차의 개념을 구현하는지 확인합니다. 검증 실패 → 보정 → 재검증의 되돌아가는 흐름, 그리고 재적재해도 건수가 그대로인 멱등성이 핵심입니다.
+함수들을 순서대로 호출하는 것이 곧 작은 오케스트레이션입니다. 1차 검증에서 음수 가격이 잡혀 보정 후 재검증하고, 프로덕션 적재를 두 번 해도 건수가 그대로임을 확인합니다.
+
+**이 코드에 쓰인 개념**
+
+- 함수 호출의 나열 — 전체 흐름이 "적재하고, 정제하고, 검증하고, 적재하고, 보고한다"로 한눈에 읽힙니다.
+- `if not validate(conn): fix(conn); validate(conn)` — 검증 실패에 대처하는 되돌아가는 흐름입니다.
+- 두 번째 `load_production` — 재실행해도 건수가 늘지 않는 멱등성을 확인합니다.
 
 ## 코드 문제
 
-주제는 "온라인 강의 수강 신청"입니다. 아래 뼈대를 완성해 통합 파이프라인을 만드세요.
+주제는 "온라인 강의 수강 신청"입니다. 아래 지저분한 원천을 받아, 같은 여섯 단계 파이프라인을 함수로 완성하세요.
 
 ```python
 import sqlite3
 
 def get_conn():
-    c = sqlite3.connect("course_pipeline.db"); c.execute("PRAGMA foreign_keys=ON"); return c
+    c = sqlite3.connect("course_pipeline.db")
+    c.execute("PRAGMA foreign_keys = ON")
+    return c
 
-# ① 수집: 지저분한 원천(공백·결측·이상값·중복)
 def extract():
     return [
-        (1," 파이썬 ","김수강","150000",1),
-        (2,"파이썬","이수강","","1"),          # fee 빈문자
-        (3,"통계 ","박수강","200000",None),     # cnt 결측
-        (4," 통계","최수강","-5000",2),         # fee 음수
-        (1," 파이썬 ","김수강","150000",1),      # 중복
+        (1, " 파이썬 ", "김수강", "150000", 1),
+        (2, "파이썬",   "이수강", "",       1),     # fee 빈 문자열
+        (3, "통계 ",    "박수강", "200000", None),  # cnt 결측
+        (4, " 통계",    "최수강", "-5000",  2),     # fee 음수
+        (1, " 파이썬 ", "김수강", "150000", 1),     # 중복
     ]
-
-# [문제 1] load_staging(conn, rows): stg_enroll 테이블에 원본 그대로 적재
-#   컬럼: eid, course TEXT, student TEXT, fee TEXT, cnt
-
-# [문제 2] transform(conn): clean_enroll 생성
-#   - DISTINCT 중복 제거, course 공백 TRIM
-#   - fee를 정수 변환(빈문자→NULL→INTEGER), cnt 결측을 1로 COALESCE
-
-# [문제 3] validate(conn): "fee 결측"=0, "fee 음수"=0 검증(치명), 통과 여부 반환
-
-# [문제 4] fix(conn): fee가 NULL이거나 음수인 행을 DELETE
-
-# [문제 5] load_production(conn): enroll 테이블(fee>=0, cnt>0 제약)에 업서트 적재.
-#   그리고 course별 총 수강료(fee*cnt)를 리포트로 출력.
-
-# ---- 실행부 ----
-# conn=get_conn(); load_staging(...); transform(...)
-# if not validate(...): fix(...); validate(...)
-# load_production(...); load_production(...)  # 멱등성 확인
 ```
 
-**도전 과제(선택):** `report`에 "정제 전(stg) 대비 프로덕션 행 수 변화"를 함께 출력해, 파이프라인이 몇 건을 걸러 냈는지 보여 주세요.
+**문제 1.** `load_staging(conn, rows)`를 완성하세요. `stg_enroll(eid, course TEXT, student TEXT, fee TEXT, cnt INTEGER)`에 원본을 그대로 적재합니다.
+
+```python
+# TODO: stg_enroll 테이블을 만들고 rows를 executemany로 적재하세요.
+```
 
 ::: {.callout-tip collapse="true"}
-## 실습 정답 예시(핵심부)
+## 정답·해설
 ```python
 def load_staging(conn, rows):
-    cur=conn.cursor(); cur.execute("DROP TABLE IF EXISTS stg_enroll")
+    cur = conn.cursor()
+    cur.execute("DROP TABLE IF EXISTS stg_enroll")
     cur.execute("""CREATE TABLE stg_enroll(
         eid INTEGER, course TEXT, student TEXT, fee TEXT, cnt INTEGER)""")
-    cur.executemany("INSERT INTO stg_enroll VALUES(?,?,?,?,?)", rows); conn.commit()
+    cur.executemany("INSERT INTO stg_enroll VALUES (?, ?, ?, ?, ?)", rows)
+    conn.commit()
+```
+`fee`를 `TEXT`로 두어 문자열로 들어온 값을 이후에 변환합니다. 원본을 그대로 보존하는 스테이징 단계입니다.
+:::
+
+**문제 2.** `transform(conn)`을 완성하세요. `clean_enroll`을 만들되 (a) `DISTINCT` 중복 제거, (b) `course` 공백 `TRIM`, (c) `fee` 정수 변환(빈 문자열→NULL→INTEGER), (d) `cnt` 결측을 1로 `COALESCE` 하세요.
+
+```python
+# TODO: CREATE TABLE clean_enroll AS SELECT DISTINCT ...
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
 def transform(conn):
-    cur=conn.cursor(); cur.execute("DROP TABLE IF EXISTS clean_enroll")
-    cur.execute("""CREATE TABLE clean_enroll AS SELECT DISTINCT
-        eid, TRIM(course) AS course, student,
-        CAST(NULLIF(TRIM(fee),'') AS INTEGER) AS fee,
-        COALESCE(cnt,1) AS cnt FROM stg_enroll"""); conn.commit()
+    cur = conn.cursor()
+    cur.execute("DROP TABLE IF EXISTS clean_enroll")
+    cur.execute("""CREATE TABLE clean_enroll AS
+        SELECT DISTINCT
+            eid,
+            TRIM(course) AS course,
+            student,
+            CAST(NULLIF(TRIM(fee), '') AS INTEGER) AS fee,
+            COALESCE(cnt, 1) AS cnt
+        FROM stg_enroll""")
+    conn.commit()
+```
+원본은 그대로 두고 정제본을 새 테이블로 만드는 재현 가능한 정제입니다.
+:::
+
+**문제 3.** `validate(conn)`을 완성하세요. "fee 결측 = 0", "fee 음수 = 0"을 치명 검증으로 점검하고, 각 결과를 출력한 뒤 모두 통과했는지(`True`/`False`)를 반환하세요.
+
+```python
+# TODO: 두 검증을 실행하고 통과 여부를 반환하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
 def validate(conn):
-    cur=conn.cursor(); ok=True
-    for n,s in [("fee결측","fee IS NULL"),("fee음수","fee<0")]:
-        c=cur.execute(f"SELECT COUNT(*) FROM clean_enroll WHERE {s}").fetchone()[0]
-        print(f"[{'통과' if c==0 else '실패-치명'}] {n}: {c}")
-        if c>0: ok=False
+    cur = conn.cursor()
+    ok = True
+    for name, cond in [("fee 결측", "fee IS NULL"), ("fee 음수", "fee < 0")]:
+        c = cur.execute(f"SELECT COUNT(*) FROM clean_enroll WHERE {cond}").fetchone()[0]
+        print(f"[{'통과' if c == 0 else '실패-치명'}] {name}: {c}건")
+        if c > 0:
+            ok = False
     return ok
+```
+검증은 문제 행 개수를 세는 쿼리입니다. 음수 `fee`가 남아 있으면 '실패-치명'이 되어 보정으로 넘어갑니다.
+:::
+
+**문제 4.** `fix(conn)`을 완성하세요. `fee`가 NULL이거나 음수인 행을 `DELETE`로 제거하세요.
+
+```python
+# TODO: DELETE FROM clean_enroll WHERE ...
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
 def fix(conn):
-    conn.execute("DELETE FROM clean_enroll WHERE fee IS NULL OR fee<0"); conn.commit()
+    conn.execute("DELETE FROM clean_enroll WHERE fee IS NULL OR fee < 0")
+    conn.commit()
+```
+검증 실패 시 되돌아가는 보정 단계입니다. 보정 뒤 다시 검증해 통과해야 프로덕션으로 넘어갑니다.
+:::
+
+**문제 5.** `load_production(conn)`을 완성하세요. `enroll(eid PRIMARY KEY, course, student, fee CHECK(fee>=0), cnt CHECK(cnt>0))`에 업서트로 적재하고, `course`별 총 수강료(`fee*cnt`)를 출력하세요.
+
+```python
+# TODO: 제약 테이블 생성 + ON CONFLICT 업서트 + course별 합계 출력
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
 def load_production(conn):
-    cur=conn.cursor()
+    cur = conn.cursor()
     cur.execute("""CREATE TABLE IF NOT EXISTS enroll(
         eid INTEGER PRIMARY KEY, course TEXT, student TEXT,
-        fee INTEGER CHECK(fee>=0), cnt INTEGER CHECK(cnt>0))""")
+        fee INTEGER CHECK(fee >= 0), cnt INTEGER CHECK(cnt > 0))""")
     cur.execute("""INSERT INTO enroll SELECT * FROM clean_enroll WHERE TRUE
-        ON CONFLICT(eid) DO UPDATE SET fee=excluded.fee, cnt=excluded.cnt""")
+        ON CONFLICT(eid) DO UPDATE SET fee = excluded.fee, cnt = excluded.cnt""")
     conn.commit()
-    for c,amt in cur.execute("SELECT course, SUM(fee*cnt) FROM enroll GROUP BY course"):
-        print(f"{c}: {amt:,}원")
-conn=get_conn(); load_staging(conn, extract()); transform(conn)
-if not validate(conn): fix(conn); validate(conn)
-load_production(conn); load_production(conn)
-print("건수:", conn.execute("SELECT COUNT(*) FROM enroll").fetchone()[0]); conn.close()
+    for course, amount in cur.execute(
+            "SELECT course, SUM(fee*cnt) FROM enroll GROUP BY course"):
+        print(f"{course}: {amount:,}원")
 ```
+업서트로 적재하므로 재실행해도 건수가 늘지 않습니다(멱등성).
+:::
+
+**문제 6.** 실행부를 완성하세요. 파이프라인을 순서대로 호출하되, 검증 실패 시 보정 후 재검증하고, 마지막에 `load_production`을 한 번 더 호출해 멱등성을 확인하세요.
+
+```python
+# TODO: get_conn → load_staging → transform → (검증 실패 시 fix) → load_production ×2
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+conn = get_conn()
+load_staging(conn, extract())
+transform(conn)
+if not validate(conn):
+    fix(conn)
+    validate(conn)
+load_production(conn)
+load_production(conn)   # 멱등성 확인
+print("최종 건수:", conn.execute("SELECT COUNT(*) FROM enroll").fetchone()[0])
+conn.close()
+```
+중복(1번)은 정제(`DISTINCT`)에서, 빈 문자열 `fee`(2번)와 음수 `fee`(4번)는 검증·보정에서 제거되어 최종 2건이 남습니다. 재적재해도 건수는 그대로입니다.
+:::
+
+**도전 과제(선택).** 리포트에 "정제 전(stg) 대비 최종(프로덕션) 행 수 변화"를 함께 출력해, 파이프라인이 몇 건을 걸러 냈는지 보여 주세요.
+
+```python
+# TODO: stg_enroll 과 enroll 의 COUNT(*) 를 비교해 출력
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+before = conn.execute("SELECT COUNT(*) FROM stg_enroll").fetchone()[0]
+after  = conn.execute("SELECT COUNT(*) FROM enroll").fetchone()[0]
+print(f"원천 {before}건 → 최종 {after}건 (걸러 냄: {before - after}건)")
+```
+원천 5건에서 중복 1건·빈 문자열 fee 1건·음수 fee 1건이 걸러져 최종 2건이 됩니다. 몇 건이 왜 걸러졌는지를 남기는 것이 산출물 리포트의 핵심입니다.
 :::

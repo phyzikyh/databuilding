@@ -1,111 +1,396 @@
 # 6주차 코딩실습
 
-## 예제 코드
+## 데이터 준비
 
-주제는 "온라인 쇼핑 회원 가입 데이터"입니다.
+주제는 "온라인 쇼핑 회원 가입 데이터"입니다. 원천을 그대로 받는 스테이징 테이블 `stg_member`를 만들고, 실제 수집물처럼 **중복·공백·표기 혼재·빈 문자열·결측**이 섞인 데이터를 넣습니다.
 
 ```python
 import sqlite3
-conn = sqlite3.connect("member.db"); cur = conn.cursor()
+
+conn = sqlite3.connect("member.db")
+cur = conn.cursor()
+
 cur.execute("DROP TABLE IF EXISTS stg_member")
 cur.execute("""CREATE TABLE stg_member(
     uid INTEGER, name TEXT, grade TEXT, point TEXT, region TEXT)""")
-raw = [
-    (1,"김하늘","vip","1500"," 서울"),
-    (2,"이바다","VIP","2000","서울 "),
-    (3,"박소나","일반","","부산"),        # point 빈문자
-    (4,"최산들","Normal",None,"부산"),    # point 결측 + 표기 Normal
-    (1,"김하늘","vip","1500"," 서울"),     # 중복
-]
-cur.executemany("INSERT INTO stg_member VALUES (?,?,?,?,?)", raw)
-conn.commit()
 
-# 정제: 중복제거 + 등급표준화 + 공백정리 + 타입변환 + 결측대치(0)
+raw = [
+    (1, "김하늘", "vip",    "1500", " 서울"),
+    (2, "이바다", "VIP",    "2000", "서울 "),
+    (3, "박소나", "일반",   "",     "부산"),      # point 빈 문자열
+    (4, "최산들", "Normal", None,   "부산"),      # point 결측 + 표기 Normal
+    (1, "김하늘", "vip",    "1500", " 서울"),     # 1번과 완전히 같은 중복
+]
+cur.executemany("INSERT INTO stg_member VALUES (?, ?, ?, ?, ?)", raw)
+conn.commit()
+```
+
+원본을 스테이징에 그대로 둔 뒤, 정제 결과는 뒤에서 새 테이블에 담습니다. 스테이징을 건드리지 않으므로 언제든 다시 정제할 수 있습니다.
+
+**이 코드에 쓰인 명령과 함수**
+
+- `sqlite3.connect("member.db")` — 현재 폴더에 데이터베이스 파일을 만들거나 기존 파일에 연결합니다.
+- `DROP TABLE IF EXISTS stg_member` — 같은 이름의 테이블이 있으면 지우고 새로 시작합니다.
+- `point TEXT` — 가격·포인트가 문자열로 들어오는 상황을 재현하기 위해 일부러 `TEXT`로 선언합니다.
+- `cur.executemany(SQL, raw)` — 여러 행을 한 번에 삽입합니다.
+- `""` 와 `None` — 각각 빈 문자열과 결측(`NULL`)으로, 서로 다른 결측 형태입니다.
+
+## 예제 1. 원본 상태 눈으로 확인하기
+
+```python
+print("행 수:", cur.execute("SELECT COUNT(*) FROM stg_member").fetchone()[0])
+for r in cur.execute("SELECT * FROM stg_member"):
+    print(r)
+```
+
+정제를 시작하기 전에 어떤 문제가 있는지 먼저 살핍니다. `grade`가 `vip/VIP/일반/Normal`로 뒤섞이고, `region`에 앞뒤 공백이 있으며, `point`에 빈 문자열과 결측이 있고, 1번 행이 두 번 들어가 있습니다.
+
+**이 코드에 쓰인 함수와 속성**
+
+- `SELECT COUNT(*)` — 현재 행 수를 세어 이후 정제 결과와 비교할 기준으로 삼습니다.
+- `SELECT *` — 모든 열을 그대로 출력해 표기·공백·결측 문제를 직접 확인합니다.
+- `.fetchone()[0]` — 한 행짜리 결과에서 첫 번째 값(건수)만 꺼냅니다.
+
+## 예제 2. 중복 확인하고 제거하기
+
+```python
+dup = cur.execute("""
+SELECT uid, name, grade, point, region, COUNT(*) AS n
+FROM stg_member
+GROUP BY uid, name, grade, point, region
+HAVING COUNT(*) > 1
+""").fetchall()
+print("중복 그룹:", dup)
+
+distinct_rows = cur.execute("SELECT DISTINCT * FROM stg_member").fetchall()
+print("중복 제거 후 행 수:", len(distinct_rows))
+```
+
+먼저 어떤 행이 몇 번 중복되는지 확인한 뒤 `DISTINCT`로 걸러 봅니다. 5행 중 완전히 똑같은 1번 행 하나가 줄어 4행이 됩니다.
+
+**이 코드에 쓰인 함수와 구문**
+
+- `GROUP BY 여러_열` — 지정한 열이 모두 같은 행을 하나의 그룹으로 묶습니다.
+- `HAVING COUNT(*) > 1` — 그룹 중 2건 이상인 것, 곧 중복만 남깁니다.
+- `SELECT DISTINCT *` — 모든 열이 같은 중복 행을 하나로 합쳐 반환합니다.
+- `.fetchall()` — 조회 결과 전체를 리스트로 가져옵니다.
+
+## 예제 3. 공백 정리하기 (TRIM)
+
+```python
+for r in cur.execute("""
+SELECT region AS 원본, TRIM(region) AS 정리
+FROM stg_member
+"""):
+    print(r)
+```
+
+`" 서울"`과 `"서울 "`은 사람에게는 같은 서울이지만 컴퓨터에게는 공백 때문에 서로 다른 값입니다. `TRIM`으로 앞뒤 공백을 없애야 같은 값으로 모입니다.
+
+**이 코드에 쓰인 함수**
+
+- `TRIM(region)` — 문자열 앞뒤의 공백을 제거합니다.
+- `AS 원본`, `AS 정리` — 결과 열에 이름을 붙여 원본과 정리 결과를 나란히 비교합니다.
+
+## 예제 4. 등급 표기 표준화하기 (CASE WHEN)
+
+```python
+for r in cur.execute("""
+SELECT grade AS 원본,
+       CASE WHEN LOWER(grade) IN ('vip') THEN 'VIP' ELSE '일반' END AS 표준
+FROM stg_member
+"""):
+    print(r)
+```
+
+`vip/VIP`는 VIP로, `일반/Normal`은 일반으로 통일합니다. `LOWER`로 대소문자를 맞춘 뒤 `CASE WHEN`으로 표준값을 정합니다.
+
+**이 코드에 쓰인 함수와 구문**
+
+- `LOWER(grade)` — 대소문자를 소문자로 통일해 `VIP`와 `vip`를 같게 만듭니다.
+- `CASE WHEN 조건 THEN 값 ELSE 값 END` — 조건에 따라 표준값을 정하는 구문입니다.
+- `IN ('vip')` — 값이 목록 안에 있는지 검사합니다. 표기가 늘면 `IN ('vip','vvip')`처럼 넓힐 수 있습니다.
+
+## 예제 5. 빈 문자열·결측 처리 후 정수 변환하기
+
+```python
+for r in cur.execute("""
+SELECT point AS 원본,
+       COALESCE(CAST(NULLIF(TRIM(point), '') AS INTEGER), 0) AS 정리
+FROM stg_member
+"""):
+    print(r)
+```
+
+`point`에는 정상값·빈 문자열·결측이 섞여 있습니다. 빈 문자열을 그대로 `CAST`하면 변환이 실패하므로, 먼저 `NULLIF`로 빈 문자열을 `NULL`로 바꾼 뒤 변환하고, 결측은 `COALESCE`로 0을 채웁니다.
+
+**이 코드에 쓰인 함수**
+
+- `TRIM(point)` — 값 주변 공백을 먼저 제거합니다.
+- `NULLIF(TRIM(point), '')` — 빈 문자열이면 `NULL`로 바꿔 변환 실패를 막습니다.
+- `CAST(... AS INTEGER)` — 문자열을 정수로 변환합니다.
+- `COALESCE(..., 0)` — 값이 `NULL`이면 0으로 대치합니다.
+
+## 예제 6. 원본을 보존하며 정제본 만들기 (CREATE TABLE AS SELECT)
+
+```python
 cur.execute("DROP TABLE IF EXISTS clean_member")
 cur.execute("""
 CREATE TABLE clean_member AS
 SELECT DISTINCT
-    uid, name,
-    CASE WHEN LOWER(grade) LIKE 'vip' THEN 'VIP' ELSE '일반' END AS grade,
-    COALESCE(CAST(NULLIF(TRIM(point),'') AS INTEGER), 0) AS point,
-    TRIM(region) AS region
+    uid,
+    name,
+    CASE WHEN LOWER(grade) IN ('vip') THEN 'VIP' ELSE '일반' END AS grade,
+    COALESCE(CAST(NULLIF(TRIM(point), '') AS INTEGER), 0)       AS point,
+    TRIM(region)                                                AS region
 FROM stg_member
 """)
 conn.commit()
 
-print("== 정제 결과 ==")
-for r in cur.execute("SELECT * FROM clean_member ORDER BY uid"): print(" ", r)
-print("\n등급 종류:", [r[0] for r in cur.execute("SELECT DISTINCT grade FROM clean_member")])
+for r in cur.execute("SELECT * FROM clean_member ORDER BY uid"):
+    print(r)
+```
+
+앞에서 하나씩 확인한 정제(중복 제거·표준화·공백 정리·타입 변환·결측 대치)를 한 번에 적용해 새 테이블 `clean_member`를 만듭니다. 원본 `stg_member`는 손대지 않으므로 언제든 다시 정제할 수 있습니다.
+
+**이 코드에 쓰인 구문**
+
+- `CREATE TABLE clean_member AS SELECT ...` — 조회 결과를 담은 새 테이블을 만듭니다. 원본은 그대로 둡니다.
+- `SELECT DISTINCT` — 정제 규칙을 적용한 뒤 남은 중복까지 한 번에 제거합니다.
+- 표준화·공백 정리·타입 변환을 각 열에 `AS 열이름`으로 지정해, 정제된 스키마를 그대로 새 테이블에 저장합니다.
+
+## 예제 7. 정제 전후 비교로 검증하기
+
+```python
+print("원본 행 수:", cur.execute("SELECT COUNT(*) FROM stg_member").fetchone()[0])
+print("정제 행 수:", cur.execute("SELECT COUNT(*) FROM clean_member").fetchone()[0])
+print("등급 종류:", [r[0] for r in cur.execute("SELECT DISTINCT grade FROM clean_member")])
 print("지역 종류:", [r[0] for r in cur.execute("SELECT DISTINCT region FROM clean_member")])
-print("행수:", cur.execute("SELECT COUNT(*) FROM clean_member").fetchone()[0])
+print("point 결측 수:", cur.execute(
+    "SELECT COUNT(*) FROM clean_member WHERE point IS NULL").fetchone()[0])
+```
+
+정제를 마쳤다고 끝이 아닙니다. 정제 전후를 비교해 의도대로 되었는지 확인합니다. 행 수가 5→4로 줄고, 등급이 2종류(VIP·일반)로, 지역이 2종류(서울·부산)로 통일되었으면 표준화가 잘 된 것입니다.
+
+**이 코드에 쓰인 함수와 표현**
+
+- 원본·정제 `COUNT(*)` 비교 — 의도보다 많이 삭제되지는 않았는지 점검합니다.
+- `SELECT DISTINCT grade` — 표기 종류가 실제로 통일되었는지 확인합니다.
+- `[r[0] for r in cur.execute(...)]` — 조회 결과에서 첫 열만 뽑아 리스트로 만드는 리스트 컴프리헨션입니다.
+
+## 예제 8. UPDATE로 이상값 안전하게 고치기
+
+```python
+# (1) 먼저 대상 행을 SELECT로 확인
+target = cur.execute("SELECT * FROM clean_member WHERE point = 0").fetchall()
+print("바꿀 대상:", target)
+
+# (2) 확인 후 UPDATE (WHERE 조건 필수)
+avg = cur.execute("SELECT ROUND(AVG(point)) FROM clean_member WHERE point > 0").fetchone()[0]
+cur.execute("UPDATE clean_member SET point = ? WHERE point = 0", (avg,))
+conn.commit()
+
+for r in cur.execute("SELECT * FROM clean_member ORDER BY uid"):
+    print(r)
 conn.close()
 ```
 
-`DISTINCT`가 중복을, `LOWER(grade) LIKE 'vip'`가 등급 표기를, `TRIM`이 공백을, `COALESCE(CAST(NULLIF(...)))`가 빈 문자열과 결측을 모두 0으로 정리합니다. 원본 `stg_member`는 손대지 않으므로 언제든 다시 정제할 수 있습니다.
+결측을 0으로 채워 둔 값을, 0을 제외한 평균 포인트로 다시 대치합니다. `UPDATE`는 강력한 만큼 위험하므로, 같은 조건으로 `SELECT`를 먼저 실행해 대상 행을 확인한 뒤 `WHERE`를 붙여 실행합니다.
+
+**이 코드에 쓰인 명령과 함수**
+
+- `SELECT ... WHERE point = 0` — `UPDATE` 전에 바뀔 행을 눈으로 확인합니다.
+- `AVG(point) ... WHERE point > 0` — 0(원래 결측)을 뺀 평균을 대치값으로 구합니다.
+- `UPDATE ... SET ... WHERE 조건` — 조건에 맞는 행만 값을 고칩니다. `WHERE`를 빠뜨리면 모든 행이 바뀝니다.
+- `conn.commit()` / `conn.close()` — 변경을 확정하고 연결을 닫습니다.
 
 ## 코드 문제
 
-주제는 "카페 리뷰 데이터"입니다.
+주제는 "카페 리뷰 데이터"입니다. 아래 스테이징 데이터를 준비한 뒤, 각 문제를 순서대로 해결하세요.
 
 ```python
 import sqlite3
-conn = sqlite3.connect("review.db"); cur = conn.cursor()
+
+conn = sqlite3.connect("review.db")
+cur = conn.cursor()
+
 cur.execute("DROP TABLE IF EXISTS stg_review")
 cur.execute("""CREATE TABLE stg_review(
     rid INTEGER, cafe TEXT, sentiment TEXT, star TEXT, visitor TEXT)""")
+
 raw = [
-    (1," 스타빈스 ","긍정","5","김손님"),
-    (2,"스타빈스","POSITIVE","4","이손님 "),
-    (3,"블루보틀 ","부정","","박손님"),        # star 빈문자
-    (4," 블루보틀","negative",None,"최손님"),  # star 결측 + 표기 negative
-    (1," 스타빈스 ","긍정","5","김손님"),        # 중복
+    (1, " 스타빈스 ", "긍정",     "5",  "김손님"),
+    (2, "스타빈스",   "POSITIVE", "4",  "이손님 "),
+    (3, "블루보틀 ",  "부정",     "",   "박손님"),      # star 빈 문자열
+    (4, " 블루보틀",  "negative", None, "최손님"),      # star 결측 + 표기 negative
+    (1, " 스타빈스 ", "긍정",     "5",  "김손님"),      # 1번과 같은 중복
 ]
-cur.executemany("INSERT INTO stg_review VALUES (?,?,?,?,?)", raw)
+cur.executemany("INSERT INTO stg_review VALUES (?, ?, ?, ?, ?)", raw)
 conn.commit()
-
-# [문제 1] clean_review 테이블을 CREATE TABLE AS SELECT로 만드세요. 요구사항:
-#   (a) DISTINCT로 중복 제거
-#   (b) cafe와 visitor의 앞뒤 공백을 TRIM으로 제거
-#   (c) sentiment를 CASE로 표준화:
-#        LOWER(sentiment)가 '긍정' 또는 'positive'이면 '긍정', 그 외 '부정'
-#   (d) star를 정수로 변환하되 빈문자/결측은 0으로 대치
-#        힌트: COALESCE(CAST(NULLIF(TRIM(star),'') AS INTEGER), 0)
-
-# [문제 2] 정제 결과 전체를 출력하세요.
-
-# [문제 3] 정제 후 cafe 종류(DISTINCT)를 출력하세요.(2개여야 정상)
-
-# [문제 4] sentiment별 리뷰 개수를 GROUP BY로 집계하세요.
-
-# [문제 5] UPDATE로 star가 0인 행을, 전체 평균 별점(0 제외)으로 대치하세요.
-#   힌트: 먼저 SELECT로 대상 확인 → UPDATE ... WHERE star=0
-
-conn.close()
 ```
 
-**도전 과제(선택):** 카페별 평균 별점을 구하되, 0점(원래 결측이었던 값)은 제외하고 계산해 보세요. (힌트: `WHERE star>0` + `GROUP BY cafe`)
+**문제 1.** 원본 `stg_review`의 행 수와 전체 내용을 출력해 어떤 문제(중복·공백·표기 혼재·빈 문자열·결측)가 있는지 확인하세요.
+
+```python
+# TODO: COUNT(*)와 SELECT * 로 원본 상태를 출력하세요.
+```
 
 ::: {.callout-tip collapse="true"}
-## 실습 정답 예시
+## 정답·해설
 ```python
-import sqlite3
-conn=sqlite3.connect("review.db"); cur=conn.cursor()
+print("행 수:", cur.execute("SELECT COUNT(*) FROM stg_review").fetchone()[0])
+for r in cur.execute("SELECT * FROM stg_review"):
+    print(r)
+```
+정제 전에 문제를 먼저 눈으로 확인하는 단계입니다. `cafe`의 공백, `sentiment`의 표기 혼재, `star`의 빈 문자열·결측, 1번 중복이 보입니다.
+:::
+
+**문제 2.** `cafe`의 앞뒤 공백을 `TRIM`으로 없앤 결과를 원본과 나란히 출력하세요.
+
+```python
+# TODO: cafe 원본과 TRIM(cafe)를 함께 출력하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for r in cur.execute("SELECT cafe, TRIM(cafe) FROM stg_review"):
+    print(r)
+```
+`" 스타빈스 "`와 `"스타빈스"`는 공백 때문에 다른 값으로 취급됩니다. `TRIM`으로 공백을 없애야 같은 카페로 모입니다.
+:::
+
+**문제 3.** `sentiment`를 표준화하세요. `LOWER(sentiment)`가 '긍정' 또는 'positive'이면 '긍정', 그 외에는 '부정'으로 바꿔 출력하세요.
+
+```python
+# TODO: CASE WHEN 과 LOWER 로 sentiment를 표준화하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for r in cur.execute("""
+SELECT sentiment,
+       CASE WHEN LOWER(sentiment) IN ('긍정','positive') THEN '긍정' ELSE '부정' END
+FROM stg_review
+"""):
+    print(r)
+```
+`POSITIVE`·`negative` 같은 표기를 `LOWER`로 맞춘 뒤 `CASE WHEN`으로 '긍정/부정' 두 값으로 통일합니다.
+:::
+
+**문제 4.** `star`를 정수로 변환하되, 빈 문자열과 결측은 0으로 대치해 출력하세요.
+
+```python
+# TODO: COALESCE(CAST(NULLIF(TRIM(star),'') AS INTEGER), 0) 을 사용하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for r in cur.execute("""
+SELECT star, COALESCE(CAST(NULLIF(TRIM(star), '') AS INTEGER), 0)
+FROM stg_review
+"""):
+    print(r)
+```
+빈 문자열을 `NULLIF`로 `NULL`로 만든 뒤 `CAST`로 정수 변환하고, 결측은 `COALESCE`로 0을 채웁니다. 순서를 지켜야 변환이 실패하지 않습니다.
+:::
+
+**문제 5.** 위 정제를 모두 적용한 새 테이블 `clean_review`를 `CREATE TABLE AS SELECT`로 만드세요. 요구사항: (a) `DISTINCT`로 중복 제거, (b) `cafe`·`visitor` 공백 제거, (c) `sentiment` 표준화, (d) `star` 정수 변환 + 빈문자·결측 0 대치.
+
+```python
+# TODO: clean_review 테이블을 만드세요. 원본 stg_review는 건드리지 마세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
 cur.execute("DROP TABLE IF EXISTS clean_review")
-cur.execute("""CREATE TABLE clean_review AS
-SELECT DISTINCT rid, TRIM(cafe) AS cafe,
-  CASE WHEN LOWER(sentiment) IN ('긍정','positive') THEN '긍정' ELSE '부정' END AS sentiment,
-  COALESCE(CAST(NULLIF(TRIM(star),'') AS INTEGER),0) AS star,
-  TRIM(visitor) AS visitor
-FROM stg_review""")
+cur.execute("""
+CREATE TABLE clean_review AS
+SELECT DISTINCT
+    rid,
+    TRIM(cafe) AS cafe,
+    CASE WHEN LOWER(sentiment) IN ('긍정','positive') THEN '긍정' ELSE '부정' END AS sentiment,
+    COALESCE(CAST(NULLIF(TRIM(star), '') AS INTEGER), 0) AS star,
+    TRIM(visitor) AS visitor
+FROM stg_review
+""")
 conn.commit()
-for r in cur.execute("SELECT * FROM clean_review ORDER BY rid"): print(r)
-print("cafe:", [r[0] for r in cur.execute("SELECT DISTINCT cafe FROM clean_review")])
-for r in cur.execute("SELECT sentiment, COUNT(*) FROM clean_review GROUP BY sentiment"): print(r)
-avg=cur.execute("SELECT ROUND(AVG(star)) FROM clean_review WHERE star>0").fetchone()[0]
-cur.execute("UPDATE clean_review SET star=? WHERE star=0",(avg,)); conn.commit()
-# 도전
-for r in cur.execute("SELECT cafe, ROUND(AVG(star),2) FROM clean_review WHERE star>0 GROUP BY cafe"):
-    print("도전:", r)
+for r in cur.execute("SELECT * FROM clean_review ORDER BY rid"):
+    print(r)
+```
+원본은 그대로 두고 정제본을 새 테이블로 만듭니다. 기준이 틀려도 원본에서 다시 시작할 수 있습니다.
+:::
+
+**문제 6.** 정제 전후를 비교하세요. 원본과 정제본의 행 수를 출력하고, 정제 후 `cafe` 종류(`DISTINCT`)가 2개인지 확인하세요.
+
+```python
+# TODO: 원본/정제 COUNT(*) 와 정제 후 DISTINCT cafe 를 출력하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+print("원본:", cur.execute("SELECT COUNT(*) FROM stg_review").fetchone()[0])
+print("정제:", cur.execute("SELECT COUNT(*) FROM clean_review").fetchone()[0])
+print("cafe 종류:", [r[0] for r in cur.execute("SELECT DISTINCT cafe FROM clean_review")])
+```
+행 수가 5→4로 줄고, 공백을 없앤 덕분에 `cafe`가 '스타빈스'·'블루보틀' 2종류로 통일되면 정제가 제대로 된 것입니다.
+:::
+
+**문제 7.** `sentiment`별 리뷰 개수를 `GROUP BY`로 집계해 출력하세요.
+
+```python
+# TODO: sentiment별 COUNT(*) 를 GROUP BY 로 집계하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for r in cur.execute("SELECT sentiment, COUNT(*) FROM clean_review GROUP BY sentiment"):
+    print(r)
+```
+표준화가 끝난 뒤 집계해야 '긍정/부정'이 정확히 묶입니다. 표기가 통일되지 않았다면 같은 감정이 여러 값으로 흩어져 집계가 어긋납니다.
+:::
+
+**문제 8.** `star`가 0인 행(원래 결측이었던 값)을, 0을 제외한 전체 평균 별점으로 `UPDATE`하세요. 실수를 막기 위해 `SELECT`로 대상을 먼저 확인한 뒤 실행하세요.
+
+```python
+# TODO: (1) WHERE star=0 을 SELECT로 확인 → (2) UPDATE ... WHERE star=0
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+print("대상:", cur.execute("SELECT * FROM clean_review WHERE star = 0").fetchall())
+avg = cur.execute("SELECT ROUND(AVG(star)) FROM clean_review WHERE star > 0").fetchone()[0]
+cur.execute("UPDATE clean_review SET star = ? WHERE star = 0", (avg,))
+conn.commit()
+for r in cur.execute("SELECT * FROM clean_review ORDER BY rid"):
+    print(r)
+```
+`UPDATE`는 `WHERE`를 빠뜨리면 모든 행이 바뀝니다. 같은 조건으로 `SELECT`를 먼저 실행해 대상을 확인하는 습관이 사고를 막습니다.
+:::
+
+**도전 과제(선택).** 카페별 평균 별점을 구하되, 0점(원래 결측이었던 값)은 빼고 계산하세요.
+
+```python
+# TODO: WHERE star > 0 + GROUP BY cafe
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for r in cur.execute("""
+SELECT cafe, ROUND(AVG(star), 2)
+FROM clean_review
+WHERE star > 0
+GROUP BY cafe
+"""):
+    print(r)
 conn.close()
 ```
+결측을 채운 0을 평균에 포함하면 별점이 실제보다 낮게 나옵니다. `WHERE star > 0`으로 원래 값만 평균 내야 정확합니다.
 :::

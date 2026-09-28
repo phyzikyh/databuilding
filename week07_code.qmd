@@ -1,116 +1,358 @@
 # 7주차 코딩실습
 
-## 예제 코드
+## 데이터 준비
 
-주제는 "쇼핑몰 상품 등록"입니다. 제약 조건이 잘못된 삽입을 어떻게 거부하는지 확인합니다.
+주제는 "쇼핑몰 상품 등록"입니다. 제약 조건으로 잘못된 데이터가 애초에 들어오지 못하게 막고, 그 위에 "문제 행을 세는" 검증 프레임워크를 얹는 흐름을 단계별로 익힙니다. 먼저 데이터베이스에 연결합니다.
 
 ```python
 import sqlite3
-conn = sqlite3.connect("catalog.db"); cur = conn.cursor()
+
+conn = sqlite3.connect("catalog.db")
+cur = conn.cursor()
+```
+
+**이 코드에 쓰인 명령**
+
+- `sqlite3.connect("catalog.db")` — 현재 폴더에 데이터베이스 파일을 만들거나 기존 파일에 연결합니다.
+- `conn.cursor()` — SQL을 실행하고 결과를 받는 커서를 만듭니다.
+
+## 예제 1. 제약 조건이 있는 테이블 만들기
+
+```python
 cur.execute("DROP TABLE IF EXISTS products")
 cur.execute("""CREATE TABLE products(
-    pid INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    price INTEGER CHECK(price >= 0),
-    stock INTEGER CHECK(stock >= 0),
-    category TEXT CHECK(category IN ('식품','의류','전자'))
+    pid      INTEGER PRIMARY KEY,
+    name     TEXT    NOT NULL,
+    price    INTEGER CHECK(price >= 0),
+    stock    INTEGER CHECK(stock >= 0),
+    category TEXT    CHECK(category IN ('식품','의류','전자'))
 )""")
+conn.commit()
+```
 
+가장 튼튼한 검증은 잘못된 데이터가 문 앞에서 막히게 하는 것입니다. 테이블을 만들 때 제약 조건을 걸어 두면, 규칙을 어긴 데이터는 저장되는 순간 거부됩니다.
+
+**이 코드에 쓰인 제약 조건**
+
+- `PRIMARY KEY` — 행을 고유하게 식별합니다(유일성·완전성).
+- `NOT NULL` — 빈 값을 금지합니다(완전성). 이름은 반드시 있어야 합니다.
+- `CHECK(price >= 0)` — 값의 범위를 강제합니다(유효성). 음수 가격을 막습니다.
+- `CHECK(category IN (...))` — 허용된 값만 받습니다(유효성). 정해진 분류 외 값을 막습니다.
+
+## 예제 2. 규칙을 지킨 정상 데이터 삽입하기
+
+```python
+cur.execute("INSERT INTO products VALUES (?, ?, ?, ?, ?)", (1, "사과", 3000, 50, "식품"))
+conn.commit()
+print("삽입 성공, 현재 행 수:", cur.execute("SELECT COUNT(*) FROM products").fetchone()[0])
+```
+
+모든 제약을 만족하는 행은 정상적으로 저장됩니다. 먼저 규칙을 지킨 데이터가 잘 들어가는지 확인합니다.
+
+**이 코드에 쓰인 함수**
+
+- `INSERT INTO products VALUES (?, ?, ?, ?, ?)` — 값 5개를 플레이스홀더로 안전하게 전달해 한 행을 삽입합니다.
+- `conn.commit()` — 삽입을 데이터베이스에 확정합니다.
+- `SELECT COUNT(*)` — 현재 행 수를 확인합니다.
+
+## 예제 3. 규칙을 어긴 삽입이 거부되는지 확인하기
+
+```python
 candidates = [
-    (1,"사과",3000,50,"식품"),
-    (2,"티셔츠",-1,10,"의류"),     # price 음수 → 거부
-    (3,None,5000,5,"전자"),        # name 결측 → 거부
-    (4,"노트북",1200000,3,"가전"), # category 허용값 아님 → 거부
-    (5,"바나나",4000,0,"식품"),
+    (2, "티셔츠", -1,      10, "의류"),   # price 음수 → CHECK 위반
+    (3, None,     5000,     5, "전자"),   # name 결측 → NOT NULL 위반
+    (4, "노트북",  1200000, 3, "가전"),   # category 허용값 아님 → CHECK 위반
+    (5, "바나나",  4000,    0, "식품"),   # 정상(단, stock 0)
 ]
 inserted = 0
 for row in candidates:
     try:
-        cur.execute("INSERT INTO products VALUES (?,?,?,?,?)", row); conn.commit()
+        cur.execute("INSERT INTO products VALUES (?, ?, ?, ?, ?)", row)
+        conn.commit()
         inserted += 1
     except sqlite3.IntegrityError as e:
-        print(f"거부 {row[0]}: {e}")
-print(f"\n삽입 성공 {inserted}건")
+        print(f"거부 pid={row[0]}: {e}")
 
-# 검증 프레임워크: (이름, 문제행 세는 SQL, 임계치, 심각도)
-tests = [
-    ("이름 결측", "SELECT COUNT(*) FROM products WHERE name IS NULL", 0, "치명"),
-    ("가격 음수", "SELECT COUNT(*) FROM products WHERE price < 0", 0, "치명"),
-    ("재고 0 상품", "SELECT COUNT(*) FROM products WHERE stock = 0", 0, "경고"),
-]
-for name, sql, th, sev in tests:
-    c = cur.execute(sql).fetchone()[0]
-    print(f"[{'통과' if c<=th else '실패-'+sev}] {name}: {c}건")
-conn.close()
+print("추가 삽입 성공:", inserted, "건")
 ```
 
-제약 조건이 규칙을 어긴 삽입을 `IntegrityError`로 거부하고, 검증 프레임워크가 "문제 행 개수"로 통과·실패를 판정하는 흐름을 확인합니다. 새 규칙은 `tests` 리스트에 한 줄만 추가하면 됩니다.
+제약을 어긴 행은 삽입되는 순간 `IntegrityError`로 거부됩니다. `try/except`로 그 예외를 잡아, 어떤 행이 왜 거부되는지 기록합니다. 정상인 바나나만 추가로 들어갑니다.
+
+**이 코드에 쓰인 문법과 예외**
+
+- `try / except sqlite3.IntegrityError as e` — 제약 위반으로 발생한 예외를 잡아 프로그램이 멈추지 않게 합니다.
+- `e` — 위반한 제약과 이유를 담은 오류 메시지입니다.
+- 거부된 행은 저장되지 않으므로, 테이블에는 규칙을 지킨 데이터만 남습니다.
+
+## 예제 4. 검증 = "문제 행의 개수를 세는 쿼리"
+
+```python
+c = cur.execute("SELECT COUNT(*) FROM products WHERE price < 0").fetchone()[0]
+print("가격 음수 행:", c, "→", "통과" if c == 0 else "실패")
+```
+
+검증의 본질은 단순합니다. **"규칙을 어긴 행이 몇 개인가"를 세는 쿼리**이며, 그 수가 0이면 통과, 0보다 크면 실패입니다. 제약 조건 덕분에 음수 가격은 애초에 없으므로 0건, 곧 통과입니다.
+
+**이 코드에 쓰인 함수와 표현**
+
+- `SELECT COUNT(*) ... WHERE 조건` — 조건(규칙 위반)에 맞는 행의 개수를 셉니다.
+- `.fetchone()[0]` — 한 행짜리 결과에서 개수 값만 꺼냅니다.
+- `"통과" if c == 0 else "실패"` — 개수가 0인지에 따라 판정하는 조건 표현식입니다.
+
+## 예제 5. 검증 프레임워크로 여러 규칙 한 번에 점검하기
+
+```python
+# (이름, 문제 행을 세는 SQL, 허용 임계치, 심각도)
+tests = [
+    ("이름 결측",  "SELECT COUNT(*) FROM products WHERE name IS NULL", 0, "치명"),
+    ("가격 음수",  "SELECT COUNT(*) FROM products WHERE price < 0",    0, "치명"),
+    ("재고 0 상품", "SELECT COUNT(*) FROM products WHERE stock = 0",    0, "경고"),
+]
+for name, sql, threshold, severity in tests:
+    c = cur.execute(sql).fetchone()[0]
+    status = "통과" if c <= threshold else f"실패-{severity}"
+    print(f"[{status}] {name}: {c}건")
+```
+
+각 검증을 (이름, 쿼리, 임계치, 심각도)로 정의해 리스트로 묶으면, 여러 규칙을 하나의 목록으로 관리할 수 있습니다. 새 규칙이 필요하면 목록에 한 줄만 추가하면 됩니다. 재고 0인 바나나가 '경고'로 잡힙니다.
+
+**이 코드에 쓰인 구조**
+
+- `tests` 리스트 — 검증 하나를 튜플 `(이름, SQL, 임계치, 심각도)`로 표현합니다.
+- `for name, sql, threshold, severity in tests` — 각 검증을 차례로 실행합니다.
+- `심각도` — '치명'은 파이프라인 중단, '경고'는 로그만 남기고 진행하는 기준입니다.
+
+## 예제 6. 트리거 — 사건에 반응해 자동 기록 남기기
+
+```python
+cur.execute("DROP TABLE IF EXISTS product_log")
+cur.execute("CREATE TABLE product_log(pid INTEGER, logged_at TEXT)")
+cur.execute("""
+CREATE TRIGGER IF NOT EXISTS log_product AFTER INSERT ON products
+BEGIN
+    INSERT INTO product_log(pid, logged_at) VALUES (NEW.pid, datetime('now'));
+END
+""")
+conn.commit()
+
+cur.execute("INSERT INTO products VALUES (6, '우유', 2500, 20, '식품')")
+conn.commit()
+print("로그:", cur.execute("SELECT * FROM product_log").fetchall())
+```
+
+트리거는 삽입·수정·삭제 같은 **사건이 일어날 때 자동으로 실행되는 규칙**입니다. 여기서는 상품이 삽입될 때마다 `product_log`에 자동으로 기록을 남깁니다. 제약 조건이 "막는" 것이라면, 트리거는 사건에 맞춰 "동작"을 실행합니다.
+
+**이 코드에 쓰인 구문**
+
+- `CREATE TRIGGER ... AFTER INSERT ON products` — products에 삽입이 일어난 뒤 자동 실행됩니다.
+- `NEW.pid` — 방금 삽입된 행의 값을 가리킵니다.
+- `datetime('now')` — 현재 시각을 기록합니다.
+- 트리거는 강력하지만 남용하면 숨은 동작이 많아져 추적이 어려우므로 꼭 필요한 곳에만 씁니다.
+
+## 예제 7. 격리(quarantine) — 실패 데이터를 따로 모으기
+
+```python
+cur.execute("DROP TABLE IF EXISTS stg_products")
+cur.execute("""CREATE TABLE stg_products(
+    pid INTEGER, name TEXT, price INTEGER, category TEXT)""")   # 제약 없는 원천
+cur.executemany("INSERT INTO stg_products VALUES (?, ?, ?, ?)", [
+    (11, "감자", 1500, "식품"),
+    (12, "셔츠", -5,   "의류"),    # 가격 음수 → 실패
+    (13, None,   3000, "전자"),    # 이름 결측 → 실패
+    (14, "배",   2000, "식품"),
+])
+conn.commit()
+
+rule = "name IS NOT NULL AND price >= 0"
+cur.execute("DROP TABLE IF EXISTS clean_products")
+cur.execute("DROP TABLE IF EXISTS quarantine_products")
+cur.execute(f"CREATE TABLE clean_products      AS SELECT * FROM stg_products WHERE {rule}")
+cur.execute(f"CREATE TABLE quarantine_products AS SELECT * FROM stg_products WHERE NOT ({rule})")
+conn.commit()
+
+print("정상(clean):", cur.execute("SELECT COUNT(*) FROM clean_products").fetchone()[0], "건")
+print("격리(quarantine):", cur.execute("SELECT * FROM quarantine_products").fetchall())
+```
+
+검증에 실패한 데이터를 버리지 않고 별도 테이블에 모아 두는 것이 **격리**입니다. 정상 데이터는 `clean_products`로 흘려보내 흐름을 막지 않고, 실패 데이터는 `quarantine_products`에 남겨 나중에 원인을 분석하고 고칠 수 있게 합니다.
+
+**이 코드에 쓰인 구문**
+
+- `rule` — 통과 조건을 한 문자열로 정의해, 통과/실패 쿼리에 재사용합니다.
+- `... WHERE {rule}` — 규칙을 만족하는 정상 데이터를 clean 테이블로 보냅니다.
+- `... WHERE NOT ({rule})` — 규칙을 어긴 데이터를 격리 테이블로 보냅니다.
+- 실패를 조용히 버리지 않고 격리하면, 원천의 어떤 문제가 반복되는지 파악할 수 있습니다.
+
+```python
+conn.close()
+```
 
 ## 코드 문제
 
-주제는 "병원 환자 등록"입니다.
+주제는 "병원 환자 등록"입니다. 아래 순서대로 제약 조건과 검증을 직접 구현하세요.
 
 ```python
 import sqlite3
-conn = sqlite3.connect("hospital.db"); cur = conn.cursor()
 
-# [문제 1] patients 테이블을 제약 조건과 함께 만드세요.
-#   pid INTEGER PRIMARY KEY
-#   name TEXT NOT NULL
-#   age INTEGER CHECK(age BETWEEN 0 AND 120)
-#   blood TEXT CHECK(blood IN ('A','B','O','AB'))
-#   phone TEXT UNIQUE
-
-# [문제 2] 아래 후보들을 반복 삽입하되, 제약 위반은 try/except로 잡아
-#          어떤 행이 왜 거부되는지 출력하세요.
-candidates = [
-    (1,"김환자",30,"A","010-1111"),
-    (2,"이환자",130,"B","010-2222"),   # age 범위 위반
-    (3,None,25,"O","010-3333"),        # name 결측
-    (4,"박환자",40,"C","010-4444"),    # blood 허용값 아님
-    (5,"최환자",50,"AB","010-1111"),   # phone 중복
-]
-# TODO: for row in candidates: try: ... except sqlite3.IntegrityError as e: ...
-
-# [문제 3] 검증 테스트 3개를 리스트로 정의하고 실행하세요.
-#   (a) 이름 결측 개수 = 0 (치명)
-#   (b) 나이 범위 위반 개수 = 0 (치명)
-#   (c) 혈액형이 4종 외 값인 개수 = 0 (경고)
-#   각 테스트에 대해 [통과]/[실패-심각도]와 건수를 출력하세요.
-
-conn.close()
+conn = sqlite3.connect("hospital.db")
+cur = conn.cursor()
 ```
 
-**도전 과제(선택):** 트리거를 만들어, `age`가 음수인 삽입을 `RAISE(ABORT, ...)`로 막아 보세요. 그리고 음수 나이 삽입을 시도해 트리거가 동작하는지 확인하세요.
+**문제 1.** `patients` 테이블을 다음 제약 조건과 함께 만드세요.
+
+- `pid INTEGER PRIMARY KEY`
+- `name TEXT NOT NULL`
+- `age INTEGER CHECK(age BETWEEN 0 AND 120)`
+- `blood TEXT CHECK(blood IN ('A','B','O','AB'))`
+- `phone TEXT UNIQUE`
+
+```python
+# TODO: 제약 조건이 포함된 CREATE TABLE 을 작성하세요.
+```
 
 ::: {.callout-tip collapse="true"}
-## 실습 정답 예시
+## 정답·해설
 ```python
-import sqlite3
-conn=sqlite3.connect("hospital.db"); cur=conn.cursor()
 cur.execute("DROP TABLE IF EXISTS patients")
 cur.execute("""CREATE TABLE patients(
- pid INTEGER PRIMARY KEY, name TEXT NOT NULL,
- age INTEGER CHECK(age BETWEEN 0 AND 120),
- blood TEXT CHECK(blood IN ('A','B','O','AB')),
- phone TEXT UNIQUE)""")
-candidates=[(1,"김환자",30,"A","010-1111"),(2,"이환자",130,"B","010-2222"),
- (3,None,25,"O","010-3333"),(4,"박환자",40,"C","010-4444"),
- (5,"최환자",50,"AB","010-1111")]
+    pid   INTEGER PRIMARY KEY,
+    name  TEXT    NOT NULL,
+    age   INTEGER CHECK(age BETWEEN 0 AND 120),
+    blood TEXT    CHECK(blood IN ('A','B','O','AB')),
+    phone TEXT    UNIQUE
+)""")
+conn.commit()
+```
+각 제약이 품질 지표(완전성·유효성·유일성)를 데이터베이스 수준에서 지킵니다.
+:::
+
+**문제 2.** 규칙을 지킨 정상 환자 1명 `(1, "김환자", 30, "A", "010-1111")`을 삽입하고, 현재 행 수를 출력하세요.
+
+```python
+# TODO: 정상 1건을 삽입하고 COUNT(*) 를 출력하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+cur.execute("INSERT INTO patients VALUES (?, ?, ?, ?, ?)", (1, "김환자", 30, "A", "010-1111"))
+conn.commit()
+print("행 수:", cur.execute("SELECT COUNT(*) FROM patients").fetchone()[0])
+```
+모든 제약을 만족하므로 정상적으로 저장됩니다.
+:::
+
+**문제 3.** 아래 후보들을 반복 삽입하되, 제약 위반은 `try/except`로 잡아 어떤 행이 왜 거부되는지 출력하세요.
+
+```python
+candidates = [
+    (2, "이환자", 130,  "B",  "010-2222"),   # age 범위 위반
+    (3, None,     25,   "O",  "010-3333"),   # name 결측
+    (4, "박환자", 40,   "C",  "010-4444"),   # blood 허용값 아님
+    (5, "최환자", 50,   "AB", "010-1111"),   # phone 중복
+]
+# TODO: for row in candidates: try: INSERT ... except sqlite3.IntegrityError as e: ...
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
 for row in candidates:
-    try: cur.execute("INSERT INTO patients VALUES(?,?,?,?,?)",row); conn.commit()
-    except sqlite3.IntegrityError as e: print("거부",row[0],e)
-tests=[("이름결측","SELECT COUNT(*) FROM patients WHERE name IS NULL",0,"치명"),
- ("나이범위","SELECT COUNT(*) FROM patients WHERE age NOT BETWEEN 0 AND 120",0,"치명"),
- ("혈액형","SELECT COUNT(*) FROM patients WHERE blood NOT IN('A','B','O','AB')",0,"경고")]
-for n,s,t,sev in tests:
-    c=cur.execute(s).fetchone()[0]
-    print(f"[{'통과' if c<=t else '실패-'+sev}] {n}: {c}")
-# 도전(트리거)
-cur.execute("""CREATE TRIGGER IF NOT EXISTS no_neg_age BEFORE INSERT ON patients
- WHEN NEW.age<0 BEGIN SELECT RAISE(ABORT,'나이는 음수 불가'); END""")
-try: cur.execute("INSERT INTO patients VALUES(9,'테스트',-3,'A','010-9')")
-except sqlite3.IntegrityError as e: print("트리거 동작:",e)
+    try:
+        cur.execute("INSERT INTO patients VALUES (?, ?, ?, ?, ?)", row)
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        print(f"거부 pid={row[0]}: {e}")
+```
+네 행이 각각 CHECK(age)·NOT NULL·CHECK(blood)·UNIQUE(phone) 위반으로 거부됩니다. 제약이 잘못된 데이터를 문 앞에서 막습니다.
+:::
+
+**문제 4.** 나이 범위(0~120)를 벗어난 행의 개수를 세어, 0이면 '통과' 아니면 '실패'로 출력하세요.
+
+```python
+# TODO: WHERE age NOT BETWEEN 0 AND 120 으로 개수를 세고 판정하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+c = cur.execute("SELECT COUNT(*) FROM patients WHERE age NOT BETWEEN 0 AND 120").fetchone()[0]
+print("나이 범위 위반:", c, "→", "통과" if c == 0 else "실패")
+```
+제약 덕분에 위반 행이 저장되지 못했으므로 0건, 곧 통과입니다. 검증은 문제 행 개수를 세는 쿼리입니다.
+:::
+
+**문제 5.** 검증 3개를 `(이름, SQL, 임계치, 심각도)` 리스트로 정의하고 실행해, 각각 `[통과]`/`[실패-심각도]`와 건수를 출력하세요. (a) 이름 결측=0(치명) (b) 나이 범위 위반=0(치명) (c) 혈액형이 4종 외=0(경고)
+
+```python
+# TODO: tests 리스트를 만들고 for 문으로 실행·판정하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+tests = [
+    ("이름 결측", "SELECT COUNT(*) FROM patients WHERE name IS NULL",              0, "치명"),
+    ("나이 범위", "SELECT COUNT(*) FROM patients WHERE age NOT BETWEEN 0 AND 120", 0, "치명"),
+    ("혈액형",   "SELECT COUNT(*) FROM patients WHERE blood NOT IN ('A','B','O','AB')", 0, "경고"),
+]
+for name, sql, threshold, severity in tests:
+    c = cur.execute(sql).fetchone()[0]
+    print(f"[{'통과' if c <= threshold else '실패-'+severity}] {name}: {c}건")
+```
+검증을 목록으로 관리하면 규칙 추가가 한 줄로 끝납니다. 심각도로 '중단할지, 기록만 할지'를 구분합니다.
+:::
+
+**문제 6.** 환자가 삽입될 때마다 `patient_log(pid, logged_at)`에 자동으로 기록을 남기는 트리거를 만들고, 환자 한 명을 더 삽입해 로그가 쌓이는지 확인하세요.
+
+```python
+# TODO: patient_log 테이블 + AFTER INSERT 트리거를 만들고, 삽입 후 로그를 출력하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+cur.execute("DROP TABLE IF EXISTS patient_log")
+cur.execute("CREATE TABLE patient_log(pid INTEGER, logged_at TEXT)")
+cur.execute("""
+CREATE TRIGGER IF NOT EXISTS log_patient AFTER INSERT ON patients
+BEGIN
+    INSERT INTO patient_log(pid, logged_at) VALUES (NEW.pid, datetime('now'));
+END
+""")
+conn.commit()
+cur.execute("INSERT INTO patients VALUES (6, '정환자', 28, 'O', '010-6666')")
+conn.commit()
+print("로그:", cur.execute("SELECT * FROM patient_log").fetchall())
+```
+트리거는 삽입 '사건'에 반응해 자동으로 로그를 남깁니다. 제약이 막는 역할이라면, 트리거는 동작을 실행하는 역할입니다.
+:::
+
+**도전 과제(선택).** 제약 없는 원천 `stg_patients`를 만들어 정상·비정상 후보를 넣고, 규칙(`name IS NOT NULL AND age BETWEEN 0 AND 120`)을 통과한 데이터는 `clean_patients`로, 실패한 데이터는 `quarantine_patients`로 나누어 저장하세요.
+
+```python
+# TODO: stg_patients 준비 → 규칙으로 clean/quarantine 분리
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+cur.execute("DROP TABLE IF EXISTS stg_patients")
+cur.execute("CREATE TABLE stg_patients(pid INTEGER, name TEXT, age INTEGER)")
+cur.executemany("INSERT INTO stg_patients VALUES (?, ?, ?)", [
+    (21, "한환자", 33), (22, None, 40), (23, "서환자", 200), (24, "윤환자", 51),
+])
+conn.commit()
+
+rule = "name IS NOT NULL AND age BETWEEN 0 AND 120"
+cur.execute("DROP TABLE IF EXISTS clean_patients")
+cur.execute("DROP TABLE IF EXISTS quarantine_patients")
+cur.execute(f"CREATE TABLE clean_patients      AS SELECT * FROM stg_patients WHERE {rule}")
+cur.execute(f"CREATE TABLE quarantine_patients AS SELECT * FROM stg_patients WHERE NOT ({rule})")
+conn.commit()
+print("정상:", cur.execute("SELECT COUNT(*) FROM clean_patients").fetchone()[0], "건")
+print("격리:", cur.execute("SELECT * FROM quarantine_patients").fetchall())
 conn.close()
 ```
+실패 데이터를 버리지 않고 격리하면 정상 흐름을 막지 않으면서 문제를 나중에 검토할 수 있습니다.
 :::

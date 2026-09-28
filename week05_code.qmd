@@ -2,92 +2,80 @@
 
 ## 데이터 준비
 
-실습 데이터셋은 **중고차 매물 데이터 120건**입니다. `sqlite3` 라이브러리를 통해 로컬 데이터베이스(`usedcar.db`)에 테이블을 생성하고 데이터를 적재합니다.
+### 라이브러리 설치
+
+VS Code에서 **터미널 → 새 터미널**을 열고 기본 EDA 라이브러리를 설치합니다.
+
+```powershell
+python -m pip install pandas numpy matplotlib seaborn ucimlrepo
+```
+
+YData Profiling을 설치합니다. `setuptools`도 버전을 지정해 함께 설치하는데, YData Profiling이 내부적으로 사용하는 `pkg_resources` 모듈이 `setuptools`에 들어 있기 때문입니다.
+
+```powershell
+python -m pip install "setuptools<81" ydata-profiling
+```
+
+설치 후 VS Code의 주피터 커널을 다시 시작합니다. 자동 EDA 도구 설치에 실패하더라도 `pandas`, `matplotlib`, `seaborn`을 사용하는 기본 실습은 진행할 수 있습니다.
+
+::: {.callout-warning collapse="true"}
+## `ModuleNotFoundError: No module named 'pkg_resources'`가 뜬다면
+
+`pkg_resources`는 `setuptools` 패키지가 제공하던 모듈인데, **`setuptools` 81 버전부터 제거**되었습니다. 그래서 최신 `setuptools`(81 이상)가 설치돼 있으면 그냥 `pip install setuptools`로는 해결되지 않고, 81 미만 버전으로 내려야 `pkg_resources`가 복구됩니다. 아래 명령으로 설치한 뒤 커널을 다시 시작하세요.
+
+```powershell
+python -m pip install "setuptools<81"
+```
+:::
+
+### UCI Automobile 데이터 불러오기
 
 ```python
-import sqlite3, random
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from ucimlrepo import fetch_ucirepo
 
-random.seed(42)
+automobile = fetch_ucirepo(id=10)
+df = automobile.data.original.copy()
+df.columns = df.columns.str.replace("-", "_", regex=False)
+df.insert(0, "car_id", range(1, len(df) + 1))
 
-conn = sqlite3.connect("usedcar.db")
-cur = conn.cursor()
-cur.execute("DROP TABLE IF EXISTS cars")
-cur.execute("""CREATE TABLE cars(
-    car_id  INTEGER PRIMARY KEY,
-    brand   TEXT, 
-    model   TEXT, 
-    year    INTEGER,
-    mileage INTEGER,          -- 주행거리(km)
-    fuel    TEXT,             -- 연료 타입
-    price   INTEGER           -- 가격(만원, 회귀 타깃 변수)
-)""")
-
-brands = {
-    "현대":   (["아반떼", "쏘나타", "그랜저", "투싼"], 1.00),
-    "기아":   (["K5", "스포티지", "쏘렌토", "모닝"],   0.95),
-    "제네시스":(["G70", "G80", "GV70"],              1.80),
-    "BMW":    (["3시리즈", "5시리즈", "X3"],          2.20),
-    "벤츠":   (["C클래스", "E클래스", "GLC"],         2.40),
-    "쉐보레": (["스파크", "말리부", "트레일블레이저"], 0.80),
-}
-fuels = ["가솔린", "디젤", "하이브리드", "전기"]
-
-rows = []
-for cid in range(1, 121):
-    brand = random.choice(list(brands))
-    models, premium = brands[brand]
-    model = random.choice(models)
-    year  = random.randint(2012, 2024)
-    age   = 2026 - year
-    mileage = max(1000, int(random.gauss(age * 13000, 8000)))
-    base  = 3200 - age * 230
-    price = max(200, int((base + random.gauss(0, 300)) * premium))
-    fuel  = random.choice(fuels)
-    rows.append([cid, brand, model, year, mileage, fuel, price])
-
-# 현실적 결함 주입
-for r in rows:
-    if r[0] in {17, 58, 93}: r[6] = None    # 가격(타깃) 결측 3건
-    if r[0] in {24, 71}:     r[4] = None    # 주행거리 결측 2건
-rows[39][3] = 1900                          # car_id 40: 연식 도메인 오류(1900년)
-rows[11][6] = 99999                         # car_id 12: 가격 극단치(99,999만원)
-
-cur.executemany("INSERT INTO cars VALUES (?,?,?,?,?,?,?)", rows)
-conn.commit()
-print("적재 완료:", cur.execute("SELECT COUNT(*) FROM cars").fetchone()[0], "건")
+print("데이터 출처:", automobile.metadata["name"])
+print("데이터 규모:", df.shape)
+display(df.head())
 ```
+
+UCI Automobile은 자동차의 제원, 보험 위험도와 가격을 포함하는 실제 공개 데이터입니다. 열 이름의 하이픈은 파이썬에서 다루기 편하도록 밑줄로 바꾸고, 행을 구분하기 위한 `car_id`를 추가합니다.
 
 ---
 
 ## 예제 코드
 
-> **분석 목적 (Problem Definition)**: 중고차 매물의 제반 특성(브랜드, 연식, 주행거리, 연료)을 활용해 **'중고차 가격(`price`, 연속형 수치 타깃)'**을 예측하는 회귀 모델을 구축하기 전, 데이터의 품질과 분포 특성을 완벽히 진단합니다.
-
 ---
 
-### 예제 1. DB 로드 및 기본 구조 파악 (`shape`, `info`, `dtypes`, 메모리)
-
-데이터베이스 엔진에서 필요한 테이블을 SQL로 추출하여 Pandas DataFrame으로 변환합니다.
+### 예제 1. 기본 구조 파악 (`shape`, `info`, `dtypes`, 메모리)
 
 ```python
-# 1. SQLite에서 Pandas 데이터프레임으로 로드
-df = pd.read_sql("SELECT * FROM cars", conn)
-
-# 2. 데이터 규모 및 구조 파악
+# 1. 데이터 규모 및 구조 파악
 print("데이터 규모 (행, 열):", df.shape)
 print("\n--- 데이터프레임 요약 정보 (Dtype, 결측, 메모리) ---")
 df.info()
 
-# 3. 기본키(PK) 유일성(Uniqueness) 검사
+# 2. 식별자 유일성(Uniqueness) 검사
 dup_pk = df['car_id'].duplicated().sum()
-print("\n기본키(car_id) 중복 건수:", dup_pk)
+print("\n식별자(car_id) 중복 건수:", dup_pk)
 ```
 
-`pd.read_sql()`을 통해 DB 연계를 단 한 줄로 수행합니다. `df.info()`는 각 열의 데이터 타입과 Non-Null 카운트, 메모리 점유량을 출력합니다. 식별자(`car_id`)의 중복 건수가 0건임을 확인하여 **유일성(Uniqueness)**을 검증합니다.
+`df.info()`는 각 열의 데이터 타입과 Non-Null 카운트, 메모리 점유량을 출력합니다. 식별자(`car_id`)의 중복 건수가 0건임을 확인하여 **유일성(Uniqueness)**을 검증합니다.
+
+**이 코드에 쓰인 함수와 메서드**
+
+- `df.shape` — 데이터프레임의 (행 수, 열 수)를 튜플로 반환합니다.
+- `df.info()` — 각 열의 이름·자료형(Dtype)·결측이 아닌 값(Non-Null) 수·전체 메모리 사용량을 한 번에 요약해 출력합니다.
+- `df['car_id'].duplicated()` — 각 행이 앞서 나온 값과 중복인지 `True`/`False`로 표시합니다.
+- `.sum()` — `True`(중복)의 개수를 세어 식별자 중복 건수를 구합니다. `0`이면 유일성이 보장됩니다.
 
 ---
 
@@ -103,9 +91,30 @@ missing_df = pd.DataFrame({
 })
 print("--- 열별 결측치 현황 ---")
 print(missing_df[missing_df['결측건수'] > 0])
+
+# 결측이 있는 열만 결측률 막대그래프로 시각화
+missing_cols = missing_df[missing_df['결측건수'] > 0].sort_values('결측률(%)')
+plt.figure(figsize=(8, 3))
+sns.barplot(x=missing_cols['결측률(%)'], y=missing_cols.index, color='salmon')
+plt.title("열별 결측률(%)")
+plt.xlabel("결측률(%)")
+plt.ylabel("열 이름")
+plt.tight_layout()
+plt.show()
 ```
 
 `df.isnull().sum()`으로 절대 결측 건수를, `mean() * 100`으로 결측률을 계산합니다. 가격(타깃) 결측이 3건(2.5%), 주행거리 결측이 2건(1.7%) 발견되었습니다. 타깃 변수의 결측치는 지도학습의 정답 레이블이 없는 상태이므로 후속 정제 단계에서 삭제(Drop) 대상이 됩니다.
+
+**이 코드에 쓰인 함수와 메서드**
+
+- `df.isnull()` — 각 셀이 결측(`NaN`)인지 `True`/`False`로 표시한 데이터프레임을 만듭니다.
+- `.sum()` — 열별 `True` 개수를 세어 결측 건수를 구합니다.
+- `df.isnull().mean() * 100` — 열별 결측 비율(평균)에 100을 곱해 결측률(%)을 계산합니다.
+- `.round(1)` — 소수점 첫째 자리까지 반올림합니다.
+- `pd.DataFrame({...})` — 결측 건수와 결측률을 하나의 표로 묶습니다.
+- `missing_df[missing_df['결측건수'] > 0]` — 결측이 하나라도 있는 열만 불린 인덱싱으로 골라 냅니다.
+- `.sort_values('결측률(%)')` — 결측률 기준으로 정렬해 막대그래프가 크기순으로 보이게 합니다.
+- `sns.barplot(x=..., y=missing_cols.index)` — 열별 결측률을 가로 막대로 그려, 어느 열이 얼마나 비었는지 한눈에 비교합니다.
 
 ---
 
@@ -114,13 +123,25 @@ print(missing_df[missing_df['결측건수'] > 0])
 단순 요약 통계량으로 포착되지 않는 비정상적 도메인 위반 데이터를 논리 조건으로 필터링합니다.
 
 ```python
-# 도메인 규칙: 연식은 2010년 이상이어야 하며, 가격은 0원보다 커야 함
-invalid_cars = df[(df['year'] < 2010) | (df['price'] <= 0)]
+# 도메인 규칙: 보험 위험등급은 -3~3, 가격과 엔진 크기는 양수
+invalid_cars = df[
+    (~df['symboling'].between(-3, 3)) |
+    (df['price'].notna() & (df['price'] <= 0)) |
+    (df['engine_size'] <= 0)
+]
 print("도메인 규칙 위반 매물 건수:", len(invalid_cars))
-print(invalid_cars[['car_id', 'brand', 'model', 'year', 'price']])
+print(invalid_cars[['car_id', 'make', 'body_style', 'symboling', 'engine_size', 'price']])
 ```
 
-`car_id = 40`인 매물에서 연식이 `1900`으로 입력된 명백한 오타(입력 오류)가 적발되었습니다. 이러한 유효성 결함은 통계적 이상치이기 이전에 수집 시스템의 버그이므로 정제 명세서에 기록하고 보정해야 합니다.
+도메인 규칙 위반 건수가 0인지 확인합니다. 결측값은 규칙 위반과 구분하여 별도로 진단합니다.
+
+**이 코드에 쓰인 함수와 메서드**
+
+- `df['symboling'].between(-3, 3)` — 값이 -3~3 범위 안이면 `True`를 반환합니다. 앞의 `~`는 조건을 반대로 뒤집어 범위 **밖**을 고릅니다.
+- `df['price'].notna()` — 결측이 아닌 값만 `True`로 표시해, 결측과 규칙 위반을 구분합니다.
+- `|` (OR) — 여러 위반 조건 중 하나라도 참이면 그 행을 선택합니다.
+- `df[조건]` — 불린 조건이 `True`인 행만 걸러 내는 불린 인덱싱입니다.
+- `len(invalid_cars)` — 규칙 위반 행 수를 셉니다.
 
 ---
 
@@ -138,12 +159,20 @@ mean_val = clean_price.mean()
 median_val = clean_price.median()
 skew_val = clean_price.skew()
 
-print(f"\n산술평균: {mean_val:.1f}만원")
-print(f"중앙값:   {median_val:.1f}만원")
+print(f"\n산술평균: ${mean_val:,.1f}")
+print(f"중앙값:   ${median_val:,.1f}")
 print(f"왜도(Skewness): {skew_val:.2f}")
 ```
 
-평균(5,761.3만 원)이 중앙값(1,184.0만 원)보다 거의 5배나 높습니다. 왜도(Skewness)가 `10.26`으로 극심한 양의 왜도(오른쪽 긴 꼬리 분포)를 띱니다. 이는 소수의 극단적 고액 이상치가 전체 평균을 비정상적으로 왜곡하고 있음을 나타냅니다.
+평균과 중앙값의 차이, 왜도의 부호와 크기를 이용해 가격 분포가 어느 방향으로 치우쳤는지 확인합니다.
+
+**이 코드에 쓰인 함수와 메서드**
+
+- `df['price'].dropna()` — 결측값을 제외한 가격만 남깁니다.
+- `.describe()` — 개수·평균·표준편차·사분위수 등 기술통계량을 한 번에 계산합니다.
+- `.mean()`, `.median()` — 산술평균과 중앙값을 구합니다. 둘의 차이로 분포의 치우침을 가늠합니다.
+- `.skew()` — 왜도(비대칭도)를 계산합니다. 양수면 오른쪽, 음수면 왼쪽으로 꼬리가 긴 분포입니다.
+- `f"${mean_val:,.1f}"` — 천 단위 쉼표(`,`)와 소수점 첫째 자리(`.1f`) 서식으로 숫자를 보기 좋게 출력합니다.
 
 ---
 
@@ -157,18 +186,27 @@ fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 # 1. 히스토그램과 커널 밀도 추정(KDE)
 sns.histplot(clean_price, kde=True, ax=axes[0], color='steelblue')
 axes[0].set_title("가격 분포 (Histogram & KDE)")
-axes[0].set_xlabel("가격(만원)")
+axes[0].set_xlabel("가격(달러)")
 
 # 2. 상자그림 (Boxplot)
 sns.boxplot(x=clean_price, ax=axes[1], color='lightcoral')
 axes[1].set_title("가격 상자그림 (Boxplot)")
-axes[1].set_xlabel("가격(만원)")
+axes[1].set_xlabel("가격(달러)")
 
 plt.tight_layout()
 plt.show()
 ```
 
-히스토그램에서 대다수 데이터는 5,000만 원 미만에 밀집되어 있으나, 상자그림 우측 끝(99,999만 원 지점)에 극단치 점이 뚜렷하게 돌출되어 있는 것을 시각적으로 확인할 수 있습니다.
+히스토그램에서 가격 분포의 치우침을 확인하고, 상자그림에서 IQR 범위를 벗어난 고가 자동차를 확인합니다.
+
+**이 코드에 쓰인 함수와 메서드**
+
+- `plt.subplots(1, 2, figsize=(12, 4))` — 1행 2열로 그림 영역을 나누고 `fig`(전체)와 `axes`(각 칸)를 돌려줍니다.
+- `sns.histplot(clean_price, kde=True, ax=axes[0])` — 히스토그램을 그리고 `kde=True`로 부드러운 밀도 곡선을 겹칩니다. `ax`로 그릴 칸을 지정합니다.
+- `sns.boxplot(x=clean_price, ax=axes[1])` — 사분위수와 IQR을 상자로 나타내 이상치 후보를 보여줍니다.
+- `axes[0].set_title(...)`, `.set_xlabel(...)` — 각 그래프의 제목과 축 이름을 지정합니다.
+- `plt.tight_layout()` — 그래프 사이 간격을 자동 조정해 겹침을 막습니다.
+- `plt.show()` — 완성된 그림을 화면에 출력합니다.
 
 ---
 
@@ -185,33 +223,41 @@ lower_fence = q1 - 1.5 * iqr
 upper_fence = q3 + 1.5 * iqr
 
 print(f"Q1: {q1:.1f}, Q3: {q3:.1f}, IQR: {iqr:.1f}")
-print(f"정상 범위 상한선: {upper_fence:.1f}만원")
+print(f"정상 범위 상한선: ${upper_fence:,.1f}")
 
 # 이상치 식별
 outliers = df[df['price'] > upper_fence]
 print("\n--- IQR 기준 이상치 목록 ---")
-print(outliers[['car_id', 'brand', 'model', 'price']])
+print(outliers[['car_id', 'make', 'body_style', 'price']])
 
 # 이상치 제거 전후의 평균 왜곡 격차 정량화
 mean_with_outlier = clean_price.mean()
 mean_without_outlier = clean_price[clean_price <= upper_fence].mean()
-print(f"\n이상치 포함 평균: {mean_with_outlier:.1f}만원")
-print(f"이상치 제외 평균: {mean_without_outlier:.1f}만원")
-print(f"왜곡 오차: {mean_with_outlier - mean_without_outlier:.1f}만원")
+print(f"\n이상치 포함 평균: ${mean_with_outlier:,.1f}")
+print(f"이상치 제외 평균: ${mean_without_outlier:,.1f}")
+print(f"평균 차이: ${mean_with_outlier - mean_without_outlier:,.1f}")
 ```
 
-상한선(6,661만 원)을 초과하는 이상치(`car_id = 12, 99999만원`) 단 1건으로 인해 전체 평균이 무려 4,393만 원이나 부풀려져 있음을 객관적 수치로 증명했습니다.
+IQR 상한선을 초과하는 자동차를 찾고, 이상치 포함 여부에 따라 평균이 얼마나 달라지는지 비교합니다.
+
+**이 코드에 쓰인 함수와 메서드**
+
+- `clean_price.quantile(0.25)`, `.quantile(0.75)` — 하위 25%(Q1)와 75%(Q3) 지점의 값을 구합니다.
+- `iqr = q3 - q1` — 사분위 범위(IQR)로, 가운데 50% 데이터가 퍼진 폭입니다.
+- `upper_fence = q3 + 1.5 * iqr` — 튜키 규칙에 따른 정상 범위 상한선(울타리)입니다.
+- `df[df['price'] > upper_fence]` — 상한선을 넘는 이상치 행만 걸러 냅니다.
+- `clean_price[clean_price <= upper_fence].mean()` — 이상치를 뺀 평균으로, 이상치가 평균을 얼마나 끌어올렸는지 비교합니다.
 
 ---
 
 ### 예제 7. 범주형 피처 탐색: 빈도, 점유율, 클래스 불균형 (`countplot`)
 
-범주형 독립변수(`brand`)의 고유값 수(카디널리티)와 범주별 점유율을 파악합니다.
+범주형 독립변수(`make`)의 고유값 수와 제조사별 점유율을 파악합니다.
 
 ```python
-print("브랜드 종류 수 (카디널리티):", df['brand'].nunique())
-brand_counts = df['brand'].value_counts()
-brand_ratios = (df['brand'].value_counts(normalize=True) * 100).round(1)
+print("제조사 종류 수:", df['make'].nunique())
+brand_counts = df['make'].value_counts()
+brand_ratios = (df['make'].value_counts(normalize=True) * 100).round(1)
 
 brand_df = pd.DataFrame({'매물수': brand_counts, '점유율(%)': brand_ratios})
 print("\n--- 브랜드별 빈도 및 점유율 ---")
@@ -219,40 +265,61 @@ print(brand_df)
 
 # 범주형 빈도 막대그래프 시각화
 plt.figure(figsize=(8, 4))
-sns.countplot(data=df, x='brand', order=brand_counts.index, palette='Blues_r')
-plt.title("브랜드별 매물 빈도 분포")
-plt.xlabel("브랜드")
-plt.ylabel("매물 수")
+sns.countplot(data=df, y='make', order=brand_counts.index, color='steelblue')
+plt.title("제조사별 자동차 수")
+plt.ylabel("제조사")
+plt.xlabel("매물 수")
 plt.show()
 ```
 
-카디널리티가 6개로 적절하며, 특정 범주로의 극단적 쏠림(클래스 불균형) 없이 비교적 균등하게 표본이 분포되어 있음을 확인합니다.
+제조사 종류 수와 제조사별 표본 수를 확인하여 일부 제조사에 데이터가 치우쳐 있는지 판단합니다.
+
+**이 코드에 쓰인 함수와 메서드**
+
+- `df['make'].nunique()` — 제조사의 고유값(종류) 수를 셉니다.
+- `df['make'].value_counts()` — 값별 빈도를 많은 순으로 셉니다.
+- `value_counts(normalize=True) * 100` — 빈도를 전체 대비 비율(%)로 바꿉니다.
+- `sns.countplot(data=df, y='make', order=brand_counts.index)` — 범주별 개수를 막대로 그리며, `order`로 빈도 순 정렬합니다. `y=`로 지정하면 가로 막대가 됩니다.
 
 ---
 
 ### 예제 8. 다변량 분석 1: 범주 × 범주 2차원 교차표 (`crosstab`)
 
-브랜드(행)와 연료 타입(열) 간의 결합 분포를 피벗 테이블 형태로 분석합니다.
+차체 형태와 연료 유형의 결합 분포를 교차표로 분석합니다.
 
 ```python
 # 빈도 기준 2차원 교차표
-ct_freq = pd.crosstab(df['brand'], df['fuel'])
-print("--- 브랜드 x 연료타입 교차 빈도표 ---")
+ct_freq = pd.crosstab(df['body_style'], df['fuel_type'])
+print("--- 차체 형태 x 연료 유형 교차 빈도표 ---")
 print(ct_freq)
 
 # 행 기준 비율(%) 교차표
-ct_ratio = pd.crosstab(df['brand'], df['fuel'], normalize='index').round(3) * 100
-print("\n--- 브랜드별 연료 포트폴리오 비중(%) ---")
+ct_ratio = pd.crosstab(df['body_style'], df['fuel_type'], normalize='index').round(3) * 100
+print("\n--- 차체 형태별 연료 유형 비중(%) ---")
 print(ct_ratio)
+
+# 교차 빈도표 히트맵
+plt.figure(figsize=(7, 4))
+sns.heatmap(ct_freq, annot=True, fmt='d', cmap='Blues')
+plt.title("차체 형태 × 연료 유형 빈도 히트맵")
+plt.tight_layout()
+plt.show()
 ```
 
-`pd.crosstab()`을 사용하면 SQL의 복잡한 조건부 집계 없이 단 한 줄로 분할표를 작성할 수 있습니다. 각 브랜드가 전기/하이브리드 등 친환경차와 내연기관차를 어떤 비율로 보유하고 있는지 입체적으로 파악합니다.
+`pd.crosstab()`으로 차체 형태마다 가솔린과 디젤 자동차가 어떤 비율로 구성되는지 확인합니다.
+
+**이 코드에 쓰인 함수와 메서드**
+
+- `pd.crosstab(df['body_style'], df['fuel_type'])` — 두 범주형 변수의 결합 빈도를 행×열 교차표로 만듭니다.
+- `normalize='index'` — 각 행의 합이 1이 되도록 비율로 바꿉니다(행 기준 비중).
+- `.round(3) * 100` — 소수를 백분율(%)로 표현합니다.
+- `sns.heatmap(ct_freq, annot=True, fmt='d')` — 교차표를 색상 격자로 그리고 `annot=True`로 각 칸에 빈도를 숫자로 표시합니다. `fmt='d'`는 정수 서식입니다.
 
 ---
 
 ### 예제 9. 다변량 분석 2: 피처와 타깃의 관계 (`groupby`, `boxplot`, `scatterplot`, `corr`)
 
-독립변수들이 타깃 가격(`price`)에 어떤 영향을 미치는지 다각도로 탐색합니다(이상치 `99999`는 제외 후 분석).
+자동차 제원과 타깃 가격(`price`)의 관계를 탐색합니다.
 
 ```python
 # 이상치를 제외한 정상 매물 분석 데이터셋
@@ -261,23 +328,40 @@ normal_df = df[(df['price'].notnull()) & (df['price'] <= upper_fence)].copy()
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
 # 1. 범주형 x 수치형 타깃: 브랜드별 가격 상자그림
-sns.boxplot(data=normal_df, x='brand', y='price', ax=axes[0], palette='Set3')
-axes[0].set_title("브랜드별 정상 가격 분포 (Boxplot)")
+sns.boxplot(data=normal_df, x='body_style', y='price', ax=axes[0], color='lightblue')
+axes[0].set_title("차체 형태별 가격 분포")
 
 # 2. 수치형 x 수치형 타깃: 주행거리와 가격의 산점도
-sns.scatterplot(data=normal_df, x='mileage', y='price', hue='brand', ax=axes[1])
-axes[1].set_title("주행거리 vs 가격 산점도 (Scatter Plot)")
+sns.scatterplot(data=normal_df, x='horsepower', y='price', hue='fuel_type', ax=axes[1])
+axes[1].set_title("마력과 가격의 관계")
 
 plt.tight_layout()
 plt.show()
 
 # 3. 수치형 변수 간 피어슨 상관계수 행렬
-corr_matrix = normal_df[['year', 'mileage', 'price']].corr().round(3)
+corr_matrix = normal_df[['engine_size', 'horsepower', 'curb_weight',
+                         'city_mpg', 'highway_mpg', 'price']].corr().round(3)
 print("--- 수치형 상관계수 행렬 ---")
 print(corr_matrix)
+
+# 상관계수 행렬 히트맵
+plt.figure(figsize=(7, 5))
+sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0, fmt='.2f')
+plt.title("수치형 변수 상관계수 히트맵")
+plt.tight_layout()
+plt.show()
 ```
 
-브랜드별 상자그림을 통해 벤츠, 제네시스 등 프리미엄 브랜드의 가격대가 일반 브랜드 대비 높게 형성되어 있음을 확인합니다. 주행거리와 가격 사이에는 음의 상관관계($r = -0.63$)가 뚜렷하게 관찰되며, 연식과는 강한 양의 상관관계($r = 0.72$)를 나타냅니다.
+차체 형태에 따른 가격 차이를 비교하고, 마력·엔진 크기·차량 무게·연비와 가격의 상관관계를 확인합니다.
+
+**이 코드에 쓰인 함수와 메서드**
+
+- `df[(df['price'].notnull()) & (df['price'] <= upper_fence)]` — 결측이 아니고 이상치도 아닌 정상 매물만 남깁니다. `&`는 두 조건을 모두 만족(AND)함을 뜻합니다.
+- `.copy()` — 원본과 분리된 복사본을 만들어 이후 수정이 원본에 영향을 주지 않게 합니다.
+- `sns.boxplot(data=..., x='body_style', y='price')` — 범주(차체 형태)별 가격 분포를 상자그림으로 비교합니다.
+- `sns.scatterplot(..., x='horsepower', y='price', hue='fuel_type')` — 두 수치형 변수의 관계를 점으로 그리며, `hue`로 연료 유형별 색을 구분합니다.
+- `.corr()` — 수치형 열 사이의 피어슨 상관계수 행렬을 계산합니다. 1에 가까울수록 강한 양의 관계입니다.
+- `sns.heatmap(corr_matrix, annot=True, center=0)` — 상관계수 행렬을 색상 격자로 그립니다. `center=0`으로 양(따뜻한 색)·음(차가운 색) 관계를 색으로 구분하고, `annot=True`로 각 칸에 계수를 표시합니다.
 
 ---
 
@@ -293,94 +377,133 @@ print(f"변환 전 가격 왜도: {normal_df['price'].skew():.2f}")
 print(f"로그 변환 후 왜도: {log_price.skew():.2f} (정규분포에 근접)")
 
 # 2. 파생변수(Feature Engineering) 생성
-normal_df['vehicle_age'] = 2026 - normal_df['year']              # 차량 나이
-normal_df['annual_mileage'] = normal_df['mileage'] / normal_df['vehicle_age'] # 연평균 주행거리
+normal_df['power_to_weight'] = (
+    normal_df['horsepower'] / normal_df['curb_weight']
+)
+normal_df['mpg_gap'] = normal_df['highway_mpg'] - normal_df['city_mpg']
 print("\n--- 파생변수 생성 결과 샘플 ---")
-print(normal_df[['brand', 'model', 'vehicle_age', 'annual_mileage', 'price']].head(3))
+print(normal_df[['make', 'body_style', 'power_to_weight', 'mpg_gap', 'price']].head(3))
+
+# 로그 변환 전후 분포 비교
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+sns.histplot(normal_df['price'], kde=True, ax=axes[0], color='steelblue')
+axes[0].set_title(f"변환 전 (왜도 {normal_df['price'].skew():.2f})")
+sns.histplot(log_price, kde=True, ax=axes[1], color='seagreen')
+axes[1].set_title(f"로그 변환 후 (왜도 {log_price.skew():.2f})")
+plt.tight_layout()
+plt.show()
 ```
+
+**이 코드에 쓰인 함수와 메서드**
+
+- `np.log1p(normal_df['price'])` — 각 값에 ln(1+x)를 적용해, 오른쪽으로 긴 꼬리를 압축하는 로그 변환입니다.
+- `.skew()` — 변환 전후 왜도를 비교해 분포가 정규분포에 가까워졌는지 확인합니다.
+- `normal_df['power_to_weight'] = ...` — 마력을 무게로 나눈 값을 새 파생변수 열로 추가합니다.
+- `normal_df['mpg_gap'] = highway_mpg - city_mpg` — 고속·도심 연비 차이를 파생변수로 만듭니다.
+- `sns.histplot(...)` 두 개를 나란히 — 변환 전과 후의 분포를 한 화면에서 비교해, 오른쪽 꼬리가 줄고 왜도가 작아지는 것을 눈으로 확인합니다.
 
 #### EDA 결과 기반 최종 데이터 정제 명세서 (Data Cleaning Specification)
 
 | 진단 항목 | EDA 발견 결함 내용 | 후속 전처리 조치 명세 |
 |---|---|---|
-| **타깃 결측치** | `price IS NULL` (3건) | 지도학습 학습셋에서 해당 3행 완전 삭제 (`dropna(subset=['price'])`) |
-| **피처 결측치** | `mileage IS NULL` (2건) | 차량 연식별 평균 주행거리로 대체(Imputation) |
-| **도메인 유효성** | 연식 오타 (`year = 1900`, 1건) | `year = 2020`으로 수동 교정 또는 이상 레코드 제거 |
-| **통계적 이상치** | 극단가 매물 (`price = 99999`, 1건) | 상한 울타리(6,661만 원) 초과치로 분류하여 제거 |
+| **타깃 결측치** | `price`에 결측값 존재 | 가격 예측용 학습셋에서는 해당 행 제외 검토 |
+| **피처 결측치** | `normalized_losses`, `horsepower` 등에 결측값 존재 | 열 특성에 따라 중앙값 또는 최빈값 대체 검토 |
+| **도메인 유효성** | 보험 위험등급·가격·엔진 크기 범위 검사 | 규칙 위반 행은 원천 확인 후 교정 또는 제외 |
+| **통계적 이상치** | IQR 상한을 초과하는 고가 자동차 | 실제 고가 차량인지 입력 오류인지 개별 확인 |
 | **타깃 비대칭성** | 가격 왜도 완화 필요 | 모델 학습 시 타깃에 `np.log1p` 로그 변환 적용 |
 | **스케일 불일치** | 주행거리(수만 단위) vs 연식(수천 단위) | 거리 기반 알고리즘을 위해 `StandardScaler` 적용 |
-| **범주형 피처** | `fuel`(4종), `brand`(6종) | 카디널리티가 낮으므로 원-핫 인코딩(`pd.get_dummies`) 적용 |
-| **파생변수** | 연식과 주행거리의 비선형 결합 | `vehicle_age`, `annual_mileage` 특성 생성 |
+| **범주형 피처** | `make`, `body_style`, `fuel_type` 등 | 원-핫 인코딩(`pd.get_dummies`) 적용 검토 |
+| **파생변수** | 출력 대비 무게와 도심·고속 연비 차이 | `power_to_weight`, `mpg_gap` 생성 |
 
 ---
 
-## 코드 문제
+## 자동 EDA 도구 사용하기
 
-주제는 **"사내 직원 데이터셋 (`employees.db`, 90건)"**입니다. 회귀 모델의 타깃 변수인 **직원 급여(`salary`, 만원)**를 중심으로, 예제에서 학습한 EDA 파이프라인을 직접 수행하세요.
+자동 EDA 도구는 데이터프레임의 기술통계, 결측값, 분포, 상관관계와 경고를 한 번에 보고서로 만듭니다. 자동 보고서는 탐색의 시작점이며, 앞의 수동 EDA에서 계산한 결과와 일치하는지 확인해야 합니다.
 
-### 실습 데이터 적재
+### YData Profiling
 
 ```python
-random.seed(7)
+from ydata_profiling import ProfileReport
 
-depts = ["개발", "영업", "인사", "디자인", "마케팅"]
-base  = {"개발": 4200, "영업": 3600, "인사": 3400, "디자인": 3500, "마케팅": 3700}
+ydata_report = ProfileReport(
+    df,
+    title="중고차 데이터 EDA 보고서",
+    explorative=True,
+    minimal=True
+)
+ydata_report.to_file("usedcar_ydata_report.html")
+```
 
-emp_rows = []
-for eid in range(1, 91):
-    dept = random.choice(depts)
-    years = random.randint(0, 20)
-    age = min(60, 24 + years + random.randint(0, 8))
-    salary = max(2800, int(base[dept] + years * 90 + random.gauss(0, 300)))
-    emp_rows.append([eid, f"직원{eid:02d}", dept, age, years, salary])
+`ProfileReport()`에 데이터프레임을 전달하면 열별 통계, 결측값, 중복, 분포와 상관관계를 계산합니다. `minimal=True`는 계산량을 줄이며, `to_file()`은 결과를 HTML 파일로 저장합니다.
 
-# 결함 주입
-for r in emp_rows:
-    if r[0] in {13, 44, 77}: r[5] = None  # 급여(타깃) 결측 3건
-    if r[0] in {29, 61}:     r[3] = None  # 나이 결측 2건
-emp_rows[7][3] = 150                      # 나이 도메인 오류 (150세)
-emp_rows[22][5] = 12000                   # 급여 극단치 (12,000만원)
+**확인할 항목**
 
-cur.execute("DROP TABLE IF EXISTS employees")
-cur.execute("""CREATE TABLE employees(
-    eid INTEGER PRIMARY KEY, 
-    name TEXT, 
-    dept TEXT,
-    age INTEGER, 
-    years INTEGER, 
-    salary INTEGER
-)""")
-cur.executemany("INSERT INTO employees VALUES (?,?,?,?,?,?)", emp_rows)
-conn.commit()
-print("직원 데이터 적재 완료:", cur.execute("SELECT COUNT(*) FROM employees").fetchone()[0], "명")
+- `Overview`에서 행·열 수와 중복 행 수
+- `Variables`에서 `price`, `horsepower`의 결측값
+- `Alerts`에서 높은 왜도와 극단값 경고
+- `Interactions`와 `Correlations`에서 수치형 변수 관계
+
+### 자동 보고서 결과 확인
+
+YData Profiling 보고서의 수치와 직접 계산한 결과를 비교합니다.
+
+```python
+manual_check = pd.Series({
+    "행 수": len(df),
+    "열 수": df.shape[1],
+    "중복 행": df.duplicated().sum(),
+    "가격 결측": df["price"].isna().sum(),
+    "마력 결측": df["horsepower"].isna().sum(),
+    "가격 왜도": round(df["price"].skew(), 2),
+})
+print(manual_check)
+```
+
+자동 보고서의 수치가 위 결과와 같은지 확인하고, 자동 도구가 알려 준 경고가 실제 데이터의 어느 행에서 발생했는지는 `pandas` 조건식으로 다시 조회합니다.
+
+## 코드 문제
+
+UCI Auto MPG 데이터의 연비(`mpg`)를 중심으로 자동차 398건을 탐색합니다.
+
+### 실습 데이터프레임 만들기
+
+```python
+auto_mpg = fetch_ucirepo(id=9)
+df_auto = auto_mpg.data.original.copy()
+df_auto.columns = df_auto.columns.str.replace("-", "_", regex=False)
+df_auto.insert(0, "car_id", range(1, len(df_auto) + 1))
+
+print("데이터 출처:", auto_mpg.metadata["name"])
+print("데이터 규모:", df_auto.shape)
+display(df_auto.head())
 ```
 
 ---
 
-**문제 1.** `employees` 테이블을 Pandas 데이터프레임 `df_emp`로 로드하고, **행/열 수, 각 열의 Dtype, 메모리 사용량, 그리고 기본키(`eid`)의 중복 여부**를 출력하세요.
+**문제 1.** `df_auto`의 **행/열 수, 각 열의 자료형, 메모리 사용량과 식별자(`car_id`)의 중복 여부**를 출력하세요.
 
-- 사용할 것: `pd.read_sql()`, `df_emp.shape`, `df_emp.info()`, `df_emp['eid'].duplicated().sum()`
+- 사용할 것: `df_auto.shape`, `df_auto.info()`, `duplicated().sum()`
 
 ```python
-# TODO: 데이터프레임 로드 및 구조, PK 중복 여부를 확인하세요.
+# TODO: 데이터프레임 구조와 식별자 중복 여부를 확인하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-df_emp = pd.read_sql("SELECT * FROM employees", conn)
-print("데이터 규모:", df_emp.shape)
-df_emp.info()
-print("기본키(eid) 중복 건수:", df_emp['eid'].duplicated().sum())
+print("데이터 규모:", df_auto.shape)
+df_auto.info()
+print("식별자 중복:", df_auto['car_id'].duplicated().sum())
 ```
-90행 6열의 구조를 확인하고, 식별자의 중복이 0건임을 검증하여 데이터의 유일성을 확인합니다.
+398행의 구조와 열별 자료형을 확인하고, 식별자의 중복이 없는지 검증합니다.
 :::
 
 ---
 
-**문제 2.** `df_emp`의 각 열별 **결측치 건수와 결측률(%)**을 하나의 데이터프레임으로 요약하여 결측치가 존재하는 열만 출력하세요.
+**문제 2.** `df_auto`의 열별 **결측 건수와 결측률(%)**을 요약하고 결측값이 있는 열만 출력하세요.
 
-- 사용할 것: `df_emp.isnull().sum()`, `(df_emp.isnull().mean() * 100).round(1)`
+- 사용할 것: `df_auto.isnull().sum()`, `df_auto.isnull().mean()`
 
 ```python
 # TODO: 열별 결측 건수 및 결측률(%) 요약표를 작성하세요.
@@ -389,174 +512,168 @@ print("기본키(eid) 중복 건수:", df_emp['eid'].duplicated().sum())
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-null_cnt = df_emp.isnull().sum()
-null_pct = (df_emp.isnull().mean() * 100).round(1)
+null_cnt = df_auto.isnull().sum()
+null_pct = (df_auto.isnull().mean() * 100).round(1)
 missing_summary = pd.DataFrame({'결측건수': null_cnt, '결측률(%)': null_pct})
 print(missing_summary[missing_summary['결측건수'] > 0])
 ```
-급여(타깃) 결측 3건(3.3%), 나이 결측 2건(2.2%)을 식별합니다. 타깃 결측치는 지도학습 학습 시 행 삭제(Listwise Deletion) 대상이 됩니다.
+`horsepower`의 결측 건수와 비율을 확인합니다.
 :::
 
 ---
 
-**문제 3.** 근무 가능한 정상 연령대인 **20세 이상 65세 이하를 벗어난 도메인 유효성 위반 레코드**를 필터링하여 출력하세요.
+**문제 3.** `origin`이 허용값 `1`, `2`, `3`을 벗어나거나 `mpg`가 0 이하인 행을 찾으세요.
 
-- 사용할 것: 불린 인덱싱 `(df_emp['age'] < 20) | (df_emp['age'] > 65)`
+- 사용할 것: `isin()`, 불린 인덱싱
 
 ```python
-# TODO: 도메인 업무 규칙을 위반한 비정상 나이 데이터를 조회하세요.
+# TODO: origin과 mpg의 도메인 규칙 위반 행을 조회하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-invalid_age = df_emp[(df_emp['age'] < 20) | (df_emp['age'] > 65)]
-print("도메인 규칙 위반 직원 목록:")
-print(invalid_age[['eid', 'name', 'dept', 'age', 'salary']])
+invalid_auto = df_auto[(~df_auto['origin'].isin([1, 2, 3])) | (df_auto['mpg'] <= 0)]
+print("도메인 규칙 위반:", len(invalid_auto), "건")
+print(invalid_auto)
 ```
-`eid = 8`인 직원의 나이가 `150세`로 입력된 명백한 시스템 입력 오류를 적발합니다.
+규칙 위반이 없다면 0건이 출력됩니다.
 :::
 
 ---
 
-**문제 4.** 타깃 변수인 **급여(`salary`)의 결측치를 제외한 5대 요약 통계량, 평균, 중앙값, 왜도(Skewness)**를 산출하세요.
+**문제 4.** 연비(`mpg`)의 기술통계량, 평균, 중앙값과 왜도를 계산하세요.
 
 - 사용할 것: `describe()`, `mean()`, `median()`, `skew()`
 
 ```python
-# TODO: 타깃 급여의 기초 통계량과 왜도를 계산하세요.
+# TODO: mpg의 기술통계량과 왜도를 계산하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-clean_sal = df_emp['salary'].dropna()
-print(clean_sal.describe().round(1))
-print(f"평균 급여:   {clean_sal.mean():.1f}만원")
-print(f"중앙값 급여: {clean_sal.median():.1f}만원")
-print(f"왜도(Skewness): {clean_sal.skew():.2f}")
+clean_mpg = df_auto['mpg'].dropna()
+print(clean_mpg.describe().round(1))
+print("평균:", round(clean_mpg.mean(), 2))
+print("중앙값:", round(clean_mpg.median(), 2))
+print("왜도:", round(clean_mpg.skew(), 2))
 ```
-극단치(12,000만 원)로 인해 평균(4,657만 원)이 중앙값(4,528만 원)보다 높게 산출되며 양의 왜도(3.89)를 보입니다.
+평균과 중앙값의 차이 및 왜도를 이용해 연비 분포의 치우침을 해석합니다.
 :::
 
 ---
 
-**문제 5.** 타깃 변수인 급여(`salary`)의 분포를 **`sns.histplot(..., kde=True)`**와 **`sns.boxplot(...)`**으로 나란히 시각화하세요.
+**문제 5.** 연비(`mpg`)의 히스토그램과 상자그림을 나란히 시각화하세요.
 
 ```python
-# TODO: 급여의 히스토그램과 상자그림을 시각화하세요.
+# TODO: mpg의 히스토그램과 상자그림을 시각화하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-sns.histplot(clean_sal, kde=True, ax=axes[0], color='teal')
-axes[0].set_title("급여 분포 (Histogram & KDE)")
-sns.boxplot(x=clean_sal, ax=axes[1], color='orange')
-axes[1].set_title("급여 상자그림 (Boxplot)")
+sns.histplot(clean_mpg, kde=True, ax=axes[0], color='teal')
+axes[0].set_title("MPG 분포")
+sns.boxplot(x=clean_mpg, ax=axes[1], color='orange')
+axes[1].set_title("MPG 상자그림")
 plt.tight_layout()
 plt.show()
 ```
-히스토그램의 커널 밀도 곡선(KDE)과 상자그림을 통해 12,000만 원 지점에 위치한 독보적인 극단치를 시각적으로 확인합니다.
+히스토그램으로 분포 형태를 보고 상자그림으로 극단값 후보를 확인합니다.
 :::
 
 ---
 
-**문제 6.** 튜키의 **$1.5\times\mathrm{IQR}$ 규칙**을 적용하여 급여의 정상 범위 상한선을 계산하고, 이를 초과하는 이상치 행을 출력하세요.
+**문제 6.** IQR 규칙으로 `mpg`의 하한·상한을 계산하고 범위를 벗어난 자동차를 출력하세요.
 
 - 공식: $Q_1 = \text{quantile}(0.25)$, $Q_3 = \text{quantile}(0.75)$, $\text{상한} = Q_3 + 1.5 \times (Q_3 - Q_1)$
 
 ```python
-# TODO: IQR 상한선을 계산하고 이상치 직원을 검출하세요.
+# TODO: mpg의 IQR 하한·상한과 이상치를 계산하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-q1 = clean_sal.quantile(0.25)
-q3 = clean_sal.quantile(0.75)
+q1 = clean_mpg.quantile(0.25)
+q3 = clean_mpg.quantile(0.75)
 iqr = q3 - q1
+lower_fence = q1 - 1.5 * iqr
 upper_fence = q3 + 1.5 * iqr
-print(f"Q1: {q1:.1f}, Q3: {q3:.1f}, IQR: {iqr:.1f}, 상한선: {upper_fence:.1f}만원")
-
-sal_outliers = df_emp[df_emp['salary'] > upper_fence]
-print("\n급여 이상치 레코드:")
-print(sal_outliers[['eid', 'name', 'dept', 'years', 'salary']])
+mpg_outliers = df_auto[(df_auto['mpg'] < lower_fence) | (df_auto['mpg'] > upper_fence)]
+print("정상 범위:", lower_fence, "~", upper_fence)
+print(mpg_outliers[['car_id', 'car_name', 'mpg']])
 ```
-상한선 약 6,861만 원을 훌쩍 넘는 `eid = 23 (직원23, 12000만원)`이 이상치로 판정됩니다.
+IQR 범위를 벗어난 고연비 또는 저연비 자동차를 확인합니다.
 :::
 
 ---
 
-**문제 7.** 범주형 독립변수인 **부서(`dept`)별 인원수와 점유율(%)**을 산출하고, **`sns.countplot`**으로 시각화하세요.
+**문제 7.** 실린더 수(`cylinders`)별 자동차 수와 비율을 계산하고 막대그래프로 나타내세요.
 
 ```python
-# TODO: 부서별 인원수, 비중 산출 및 막대그래프를 시각화하세요.
+# TODO: 실린더 수별 자동차 수와 비율을 계산하고 시각화하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-dept_cnt = df_emp['dept'].value_counts()
-dept_ratio = (df_emp['dept'].value_counts(normalize=True) * 100).round(1)
-print(pd.DataFrame({'인원수': dept_cnt, '비중(%)': dept_ratio}))
+cyl_cnt = df_auto['cylinders'].value_counts().sort_index()
+cyl_ratio = (df_auto['cylinders'].value_counts(normalize=True) * 100).round(1)
+print(pd.DataFrame({'자동차수': cyl_cnt, '비율(%)': cyl_ratio}))
 
 plt.figure(figsize=(7, 3))
-sns.countplot(data=df_emp, x='dept', order=dept_cnt.index, palette='viridis')
-plt.title("부서별 인원 분포")
+sns.countplot(data=df_auto, x='cylinders', order=cyl_cnt.index, color='steelblue')
+plt.title("실린더 수 분포")
 plt.show()
 ```
-5개 부서의 인력 분포가 고르게 유지되고 있는지 클래스 균형 상태를 진단합니다.
+어떤 실린더 구성이 가장 많은지 확인합니다.
 :::
 
 ---
 
-**문제 8.** 근속연수(`years`)를 5년 미만인 **'주니어'**와 5년 이상인 **'시니어'**로 구분하는 파생 컬럼을 만들고, **부서(행) × 근속단계(열) 2차원 교차표**를 작성하세요.
+**문제 8.** `model_year`가 76 미만이면 `초기`, 아니면 `후기`인 `year_group`을 만들고, `origin`과 교차표를 작성하세요.
 
 - 사용할 것: `np.where()`, `pd.crosstab()`
 
 ```python
-# TODO: 근속단계 파생 컬럼 생성 후 부서와의 교차표를 작성하세요.
+# TODO: year_group을 만들고 origin과 교차표를 작성하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-df_emp['career_stage'] = np.where(df_emp['years'] < 5, '주니어(5년미만)', '시니어(5년이상)')
-ct_emp = pd.crosstab(df_emp['dept'], df_emp['career_stage'])
-print("--- 부서 x 근속단계 교차표 ---")
-print(ct_emp)
+df_auto['year_group'] = np.where(df_auto['model_year'] < 76, '초기', '후기')
+ct_auto = pd.crosstab(df_auto['origin'], df_auto['year_group'])
+print(ct_auto)
 ```
-부서별 인력 연차 구성을 2차원 매트릭스로 확인하여 각 부서의 숙련도 분포를 한눈에 비교합니다.
+생산 지역 코드와 연식 그룹의 결합 분포를 확인합니다.
 :::
 
 ---
 
-**문제 9.** 정상 급여 데이터(이상치 12,000 제외)에 대해 **부서별 평균 급여(`groupby`)**를 비교하고, **근속연수(`years`)와 급여 간의 피어슨 상관계수**를 구하세요.
+**문제 9.** `origin`별 평균 연비를 비교하고 `weight`, `horsepower`, `mpg`의 상관계수를 구하세요.
 
-- 사용할 것: `groupby('dept')['salary'].mean()`, `corr()`
+- 사용할 것: `groupby('origin')['mpg'].mean()`, `corr()`
 
 ```python
-# TODO: 부서별 평균 급여 집계 및 근속연수와 급여의 상관계수를 산출하세요.
+# TODO: origin별 평균 mpg와 수치형 변수 상관계수를 계산하세요.
 ```
 
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-normal_emp = df_emp[(df_emp['salary'].notnull()) & (df_emp['salary'] <= upper_fence)]
-print("--- 부서별 평균 급여 ---")
-print(normal_emp.groupby('dept')['salary'].mean().round(1))
-
-print("\n--- 수치형 상관계수 행렬 ---")
-print(normal_emp[['age', 'years', 'salary']].corr().round(3))
+print(df_auto.groupby('origin')['mpg'].mean().round(2))
+print(df_auto[['weight', 'horsepower', 'mpg']].corr().round(3))
 ```
-개발 부서의 평균 급여가 가장 높게 집계되며, 근속연수와 급여 사이에 강한 양의 상관관계($r \approx 0.85$)가 관찰됩니다.
+차량 무게와 마력이 연비와 어떤 방향으로 관계되는지 해석합니다.
 :::
 
 ---
 
-**문제 10.** 타깃 변수인 급여(`salary`)에 **로그 변환(`np.log1p`)**을 적용하여 왜도 완화 효과를 검증하고, **결측치·이상치·스케일링·인코딩 방향을 포함한 '데이터 정제 명세서'**를 요약 정리하세요.
+**문제 10.** `weight`에 로그 변환을 적용해 왜도를 비교하고 Auto MPG 데이터의 정제 명세서를 출력하세요.
 
 ```python
 # TODO: 로그 변환 전후 왜도를 비교하고 정제 명세서를 출력하세요.
@@ -565,18 +682,16 @@ print(normal_emp[['age', 'years', 'salary']].corr().round(3))
 ::: {.callout-tip collapse="true"}
 ## 정답·해설
 ```python
-log_sal = np.log1p(normal_emp['salary'])
-print(f"로그 변환 전 왜도: {normal_emp['salary'].skew():.2f}")
-print(f"로그 변환 후 왜도: {log_sal.skew():.2f}")
+log_weight = np.log1p(df_auto['weight'])
+print("변환 전 왜도:", round(df_auto['weight'].skew(), 2))
+print("변환 후 왜도:", round(log_weight.skew(), 2))
 
-print("\n[사내 직원 데이터 정제 명세서]")
-print("1. 타깃 결측치: 급여 결측 3건 삭제 (dropna)")
-print("2. 피처 결측치: 나이 결측 2건 부서별 중앙값 대체")
-print("3. 도메인 오류: 나이 150세 레코드 1건 교정/제거")
-print("4. 통계적 이상치: 급여 12000만원 1건 모델링 분리 또는 제거")
-print("5. 피처 스케일링: age, years에 대해 StandardScaler 적용")
-print("6. 범주형 인코딩: dept(5종)에 One-Hot Encoding 적용")
-print("7. 특성 공학: annual_salary_growth = salary / (years + 1) 파생변수 생성")
+print("\n[Auto MPG 정제 명세서]")
+print("1. horsepower 결측값 처리")
+print("2. mpg IQR 이상치 개별 확인")
+print("3. origin은 범주형 변수로 변환")
+print("4. 수치형 변수의 단위와 분포 확인 후 스케일링")
+print("5. car_name은 제조사 추출 또는 고유 식별 정보로 처리")
 ```
 EDA를 통해 발견한 정량적 사실을 바탕으로 후속 머신러닝 전처리 파이프라인의 명확한 실행 지침(정제 명세서)을 완성합니다.
 :::
