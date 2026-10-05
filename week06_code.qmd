@@ -220,8 +220,8 @@ cur.execute("""CREATE TABLE stg_review(
 
 raw = [
     (1, " 스타빈스 ", "긍정",     "5",  "김손님"),
-    (2, "스타빈스",   "POSITIVE", "4",  "이손님 "),
-    (3, "블루보틀 ",  "부정",     "",   "박손님"),      # star 빈 문자열
+    (2, "스타빈스",   "POSITIVE", "",   "이손님 "),      # star 빈 문자열
+    (3, "블루보틀 ",  "부정",     "3",  "박손님"),
     (4, " 블루보틀",  "negative", None, "최손님"),      # star 결측 + 표기 negative
     (1, " 스타빈스 ", "긍정",     "5",  "김손님"),      # 1번과 같은 중복
 ]
@@ -355,7 +355,30 @@ for r in cur.execute("SELECT sentiment, COUNT(*) FROM clean_review GROUP BY sent
 표준화가 끝난 뒤 집계해야 '긍정/부정'이 정확히 묶입니다. 표기가 통일되지 않았다면 같은 감정이 여러 값으로 흩어져 집계가 어긋납니다.
 :::
 
-**문제 8.** `star`가 0인 행(원래 결측이었던 값)을, 0을 제외한 전체 평균 별점으로 `UPDATE`하세요. 실수를 막기 위해 `SELECT`로 대상을 먼저 확인한 뒤 실행하세요.
+**문제 8.** 카페별 평균 별점을 구하되, 결측을 채운 값(`star = 0`)은 빼고 계산하세요. `WHERE star > 0`으로 원래 입력된 별점만 `GROUP BY cafe`로 집계합니다.
+
+- 사용할 것: `WHERE star > 0`, `GROUP BY cafe`, `AVG()`
+- 예상 결과: 스타빈스 5.0, 블루보틀 3.0
+
+```python
+# TODO: WHERE star > 0 + GROUP BY cafe 로 카페별 평균 별점을 구하세요.
+```
+
+::: {.callout-tip collapse="true"}
+## 정답·해설
+```python
+for r in cur.execute("""
+SELECT cafe, ROUND(AVG(star), 2)
+FROM clean_review
+WHERE star > 0
+GROUP BY cafe
+"""):
+    print(r)
+```
+결측을 채운 `0`을 평균에 포함하면 별점이 실제보다 낮게 나옵니다. `WHERE star > 0`으로 원래 입력된 별점만 평균 내야 정확합니다. 이 집계는 결측을 다른 값으로 덮어쓰기 **전에** 수행해야, 어떤 행이 원래 결측이었는지 구분할 수 있습니다.
+:::
+
+**도전 과제(선택).** `star`가 0인 행(원래 결측이었던 값)을, 0을 제외한 전체 평균 별점으로 `UPDATE`하세요. 실수를 막기 위해 `SELECT`로 대상을 먼저 확인한 뒤 실행하세요.
 
 ```python
 # TODO: (1) WHERE star=0 을 SELECT로 확인 → (2) UPDATE ... WHERE star=0
@@ -370,27 +393,7 @@ cur.execute("UPDATE clean_review SET star = ? WHERE star = 0", (avg,))
 conn.commit()
 for r in cur.execute("SELECT * FROM clean_review ORDER BY rid"):
     print(r)
-```
-`UPDATE`는 `WHERE`를 빠뜨리면 모든 행이 바뀝니다. 같은 조건으로 `SELECT`를 먼저 실행해 대상을 확인하는 습관이 사고를 막습니다.
-:::
-
-**도전 과제(선택).** 카페별 평균 별점을 구하되, 0점(원래 결측이었던 값)은 빼고 계산하세요.
-
-```python
-# TODO: WHERE star > 0 + GROUP BY cafe
-```
-
-::: {.callout-tip collapse="true"}
-## 정답·해설
-```python
-for r in cur.execute("""
-SELECT cafe, ROUND(AVG(star), 2)
-FROM clean_review
-WHERE star > 0
-GROUP BY cafe
-"""):
-    print(r)
 conn.close()
 ```
-결측을 채운 0을 평균에 포함하면 별점이 실제보다 낮게 나옵니다. `WHERE star > 0`으로 원래 값만 평균 내야 정확합니다.
+`UPDATE`는 `WHERE`를 빠뜨리면 모든 행이 바뀝니다. 같은 조건으로 `SELECT`를 먼저 실행해 대상을 확인하는 습관이 사고를 막습니다. 앞 문제에서 카페별 평균을 먼저 구한 뒤 이 대치를 수행하므로, 집계가 대치값에 영향을 받지 않습니다.
 :::
