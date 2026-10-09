@@ -1,0 +1,426 @@
+# 중간고사 코드 기출문제
+
+## 1주차 — 도서관 장서 (`library.db`)
+
+**준비 코드 — 먼저 실행**
+
+```python
+import sqlite3
+
+conn = sqlite3.connect("library.db")
+cur = conn.cursor()
+
+cur.execute("DROP TABLE IF EXISTS books")
+cur.execute("""CREATE TABLE books(
+    book_id  INTEGER PRIMARY KEY,
+    title    TEXT NOT NULL,
+    author   TEXT,
+    category TEXT,
+    year     INTEGER
+)""")
+
+books = [
+    (1,  "데미안", "헤르만 헤세", "소설", 1919),
+    (2,  "어린 왕자", "생텍쥐페리", "소설", 1943),
+    (3,  "1984", "조지 오웰", "소설", 1949),
+    (4,  "코스모스", "칼 세이건", "과학", 1980),
+    (5,  "이기적 유전자", "리처드 도킨스", "과학", 1976),
+    (6,  "총, 균, 쇠", "재레드 다이아몬드", "역사", 1997),
+    (7,  "사피엔스", "유발 하라리", "역사", 2011),
+    (8,  "정의란 무엇인가", "마이클 샌델", "철학", 2009),
+    (9,  "미움받을 용기", "기시미 이치로", "자기계발", 2013),
+    (10, "나미야 잡화점의 기적", "히가시노 게이고", "소설", 2012),
+    (11, "클린 코드", "로버트 마틴", "IT", 2008),
+    (12, "혼자 공부하는 파이썬", "윤인성", "IT", 2019),
+    (13, "팩트풀니스", "한스 로슬링", "과학", 2018),
+    (14, "아몬드", "손원평", "소설", 2017),
+    (15, "물고기는 존재하지 않는다", "룰루 밀러", "과학", 2020),
+    (16, "하얼빈", "김훈", "소설", 2022),
+    (17, "역사의 쓸모", "최태성", "역사", 2019),
+    (18, "데이터 과학을 위한 통계", "피터 브루스", "IT", 2018),
+]
+
+cur.executemany("INSERT INTO books VALUES (?, ?, ?, ?, ?)", books)
+conn.commit()
+conn.close()
+```
+
+### 문제 1. 전체 조회와 미리보기
+
+```python
+import sqlite3
+conn = sqlite3.connect("library.db")
+cur = conn.cursor()
+
+rows = cur.execute("SELECT * FROM books").fetchall()   # 모든 열·모든 행
+print("전체 행 수:", len(rows))
+for r in rows[:3]:
+    print("  ", r)
+```
+
+`SELECT *`는 모든 열을 가져오고, `fetchall()`은 결과 전체를 리스트로 돌려줍니다.
+
+## 2주차 — 병원 예약 (`clinic_sources.db`)
+
+**준비 코드 — 먼저 실행**
+
+```python
+import sqlite3
+import random
+from datetime import date, timedelta
+
+random.seed(2026)
+
+conn = sqlite3.connect("clinic_sources.db")
+conn.row_factory = sqlite3.Row
+cur = conn.cursor()
+
+cur.execute("DROP TABLE IF EXISTS appointments")
+cur.execute("""
+CREATE TABLE appointments (
+    appt_id      INTEGER PRIMARY KEY,
+    hospital     TEXT NOT NULL,
+    visit_date   TEXT NOT NULL,
+    patient_age  INTEGER,
+    department   TEXT NOT NULL,
+    wait_min     INTEGER,
+    status       TEXT NOT NULL,
+    source_type  TEXT NOT NULL
+)
+""")
+
+departments = ["내과", "정형외과", "소아과", "피부과"]
+statuses = ["완료", "완료", "완료", "취소"]
+start = date(2026, 8, 1)
+
+gana_rows = []
+for appt_id in range(1, 37):
+    visit_date = (start + timedelta(days=(appt_id - 1) % 14)).isoformat()
+    age = random.randint(5, 82)
+    department = random.choice(departments)
+    wait_min = max(3, int(random.gauss(24, 10)))
+    status = random.choice(statuses)
+    gana_rows.append(
+        (appt_id, "가나병원", visit_date, age,
+         department, wait_min, status, "csv")
+    )
+
+cur.executemany("""
+INSERT INTO appointments
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+""", gana_rows)
+
+dara_json = []
+for appt_id in range(37, 73):
+    record = {
+        "id": appt_id,
+        "date": (start + timedelta(days=(appt_id - 37) % 14)).isoformat(),
+        "dept": random.choice(departments),
+        "state": random.choice(statuses),
+        "age": random.randint(5, 82),
+        "wait": max(3, int(random.gauss(31, 13)))
+    }
+    dara_json.append(record)
+
+for record in dara_json:
+    if record["id"] in {41, 58, 69}:
+        record.pop("wait")
+    if record["id"] in {47, 64}:
+        record.pop("age")
+dara_json[11]["wait"] = 180
+dara_json[25]["age"] = 220
+
+for record in dara_json:
+    cur.execute("""
+    INSERT INTO appointments
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        record["id"], "다라병원", record["date"],
+        record.get("age"), record["dept"], record.get("wait"),
+        record["state"], "json"
+    ))
+
+conn.commit()
+print("appointments 테이블 생성 완료")
+```
+
+### 문제 2. 전체 규모와 소스별 건수
+
+```python
+total = cur.execute("SELECT COUNT(*) FROM appointments").fetchone()[0]
+print("전체 예약:", total)
+
+for row in cur.execute("""
+SELECT source_type, COUNT(*) AS cnt
+FROM appointments
+GROUP BY source_type
+ORDER BY source_type
+"""):
+    print(row["source_type"], row["cnt"])
+```
+
+`COUNT(*)`은 모든 행을 세고 `GROUP BY`는 같은 소스 유형끼리 묶습니다. 예상 결과는 전체 72건, CSV 36건, JSON 36건입니다.
+
+### 문제 3. 병원별 요약 통계
+
+```python
+for row in cur.execute("""
+SELECT
+    hospital,
+    COUNT(*) AS appointments,
+    ROUND(AVG(wait_min), 1) AS avg_wait,
+    MIN(wait_min) AS min_wait,
+    MAX(wait_min) AS max_wait
+FROM appointments
+GROUP BY hospital
+ORDER BY avg_wait DESC
+"""):
+    print(dict(row))
+```
+
+`AVG`, `MIN`, `MAX`는 `NULL`을 자동으로 제외합니다. `GROUP BY hospital`로 병원별 한 행씩 요약합니다.
+
+## 3주차 — 웹 크롤링
+
+**준비 코드 — 먼저 실행** (인터넷 연결이 필요합니다.)
+
+```python
+import requests
+from bs4 import BeautifulSoup
+
+START_URL = "https://phyzikyh.github.io/databuilding/store/books/page1.html"
+```
+
+### 문제 4. 실제 웹페이지 요청하기
+
+```python
+response = requests.get(START_URL, timeout=10)
+response.raise_for_status()
+
+print("상태 코드:", response.status_code)
+print("응답 길이:", len(response.text))
+```
+
+`requests.get()`은 URL로 HTTP 요청을 보냅니다. `raise_for_status()`는 404·500 같은 오류 응답을 예외로 알려 주며, 정상이라면 상태 코드는 `200`입니다.
+
+## 4주차 — 주문 적재 (`shop.db`)
+
+**준비 코드 — 먼저 실행** (고객 디멘션까지 만듭니다.)
+
+```python
+import sqlite3
+
+conn = sqlite3.connect("shop.db")
+cur = conn.cursor()
+cur.execute("PRAGMA foreign_keys = ON")
+
+cur.execute("DROP TABLE IF EXISTS orders")
+cur.execute("DROP TABLE IF EXISTS customers")
+
+cur.execute("""CREATE TABLE customers(
+    cid    INTEGER PRIMARY KEY,
+    name   TEXT NOT NULL,
+    region TEXT NOT NULL
+)""")
+cur.executemany("INSERT INTO customers VALUES (?,?,?)", [
+    (1, "김서울", "서울"),
+    (2, "이부산", "부산"),
+    (3, "박대구", "대구"),
+    (4, "최서울", "서울"),
+])
+conn.commit()
+```
+
+### 문제 5. 팩트 테이블 생성 — 외래 키 참조 무결성
+
+```python
+cur.execute("""CREATE TABLE orders(
+    oid     INTEGER PRIMARY KEY,
+    cid     INTEGER NOT NULL,
+    product TEXT NOT NULL,
+    amount  INTEGER NOT NULL,
+    FOREIGN KEY(cid) REFERENCES customers(cid)
+)""")
+conn.commit()
+
+# 존재하지 않는 유령 고객(cid=99)의 주문 삽입 시도
+try:
+    cur.execute("INSERT INTO orders VALUES (999, 99, '태블릿', 500000)")
+    conn.commit()
+except sqlite3.IntegrityError as e:
+    conn.rollback()
+    print("외래 키 참조 무결성 위반으로 차단됨:", e)
+
+print("현재 프로덕션 팩트 건수:", cur.execute("SELECT COUNT(*) FROM orders").fetchone()[0], "건")
+```
+
+`FOREIGN KEY(cid) REFERENCES customers(cid)`는 부모 디멘션에 실존하지 않는 고객 번호를 거부합니다. `try/except`로 예외를 잡고 `rollback()`으로 복구합니다.
+
+### 문제 6. 업서트 — 증분 데이터의 갱신과 신규 삽입
+
+**이어서 준비** — 업서트 대상이 될 기준 주문을 먼저 적재합니다.
+
+```python
+cur.executemany("INSERT INTO orders VALUES (?,?,?,?)", [
+    (101, 1, "노트북", 1500000),
+    (102, 2, "마우스", 25000),
+    (103, 1, "키보드", 80000),
+])
+conn.commit()
+```
+
+```python
+# 새로 유입된 증분 데이터: 101번 주문 금액 할인 갱신 + 106번 신규 주문 삽입
+incremental_batch = [
+    (101, 1, "노트북(할인적용)", 1350000),  # 기존 101번 주문 갱신
+    (106, 4, "헤드셋", 89000),             # 신규 106번 주문 신규 삽입
+]
+
+cur.executemany("""INSERT INTO orders VALUES (?,?,?,?)
+    ON CONFLICT(oid) DO UPDATE SET
+        cid     = excluded.cid,
+        product = excluded.product,
+        amount  = excluded.amount""", incremental_batch)
+conn.commit()
+
+print("--- 101번 주문 업서트 결과 (금액 갱신 확인) ---")
+print(cur.execute("SELECT * FROM orders WHERE oid=101").fetchone())
+print("--- 106번 신규 주문 삽입 확인 ---")
+print(cur.execute("SELECT * FROM orders WHERE oid=106").fetchone())
+```
+
+`ON CONFLICT(oid)`로 기본 키 충돌을 감지해, 이미 있으면 `DO UPDATE`로 수정하고 없으면 삽입합니다. `excluded`는 이번 배치에서 새로 들어온 행의 값입니다.
+
+## 5주차 — 중고차 EDA (pandas)
+
+**준비 코드 — 먼저 실행** (인터넷 연결이 필요합니다.)
+
+```python
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from ucimlrepo import fetch_ucirepo
+
+automobile = fetch_ucirepo(id=10)
+df = automobile.data.original.copy()
+df.columns = df.columns.str.replace("-", "_", regex=False)
+df.insert(0, "car_id", range(1, len(df) + 1))
+
+clean_price = df['price'].dropna()   # 결측을 제외한 가격
+```
+
+### 문제 7. 이상치 판정 — 튜키의 1.5×IQR 규칙
+
+```python
+q1 = clean_price.quantile(0.25)
+q3 = clean_price.quantile(0.75)
+iqr = q3 - q1
+
+lower_fence = q1 - 1.5 * iqr
+upper_fence = q3 + 1.5 * iqr
+
+print(f"Q1: {q1:.1f}, Q3: {q3:.1f}, IQR: {iqr:.1f}")
+print(f"정상 범위 상한선: ${upper_fence:,.1f}")
+
+# 이상치 식별
+outliers = df[df['price'] > upper_fence]
+print("\n--- IQR 기준 이상치 목록 ---")
+print(outliers[['car_id', 'make', 'body_style', 'price']])
+
+# 이상치 제거 전후의 평균 왜곡 격차 정량화
+mean_with_outlier = clean_price.mean()
+mean_without_outlier = clean_price[clean_price <= upper_fence].mean()
+print(f"\n이상치 포함 평균: ${mean_with_outlier:,.1f}")
+print(f"이상치 제외 평균: ${mean_without_outlier:,.1f}")
+print(f"평균 차이: ${mean_with_outlier - mean_without_outlier:,.1f}")
+```
+
+사분위수($Q_1, Q_3$)로 IQR을 구해 극단치에 왜곡되지 않는 이상치 경계선을 세웁니다. 상한선을 넘는 자동차를 찾고, 이상치 포함 여부에 따라 평균이 얼마나 달라지는지 비교합니다.
+
+## 6주차 — 회원 정제 (`member.db`)
+
+**준비 코드 — 먼저 실행**
+
+```python
+import sqlite3
+
+conn = sqlite3.connect("member.db")
+cur = conn.cursor()
+
+cur.execute("DROP TABLE IF EXISTS stg_member")
+cur.execute("""CREATE TABLE stg_member(
+    uid INTEGER, name TEXT, grade TEXT, point TEXT, region TEXT)""")
+
+raw = [
+    (1, "김하늘", "vip",    "1500", " 서울"),
+    (2, "이바다", "VIP",    "2000", "서울 "),
+    (3, "박소나", "일반",   "",     "부산"),      # point 빈 문자열
+    (4, "최산들", "Normal", None,   "부산"),      # point 결측 + 표기 Normal
+    (1, "김하늘", "vip",    "1500", " 서울"),     # 1번과 완전히 같은 중복
+]
+cur.executemany("INSERT INTO stg_member VALUES (?, ?, ?, ?, ?)", raw)
+conn.commit()
+```
+
+### 문제 8. 빈 문자열·결측 처리 후 정수 변환하기
+
+```python
+for r in cur.execute("""
+SELECT point AS 원본,
+       COALESCE(CAST(NULLIF(TRIM(point), '') AS INTEGER), 0) AS 정리
+FROM stg_member
+"""):
+    print(r)
+```
+
+빈 문자열을 그대로 `CAST`하면 변환이 실패하므로, 먼저 `NULLIF`로 빈 문자열을 `NULL`로 바꾼 뒤 변환하고, 결측은 `COALESCE`로 0을 채웁니다.
+
+### 문제 9. 원본을 보존하며 정제본 만들기 (CREATE TABLE AS SELECT)
+
+```python
+cur.execute("DROP TABLE IF EXISTS clean_member")
+cur.execute("""
+CREATE TABLE clean_member AS
+SELECT DISTINCT
+    uid,
+    name,
+    CASE WHEN LOWER(grade) IN ('vip') THEN 'VIP' ELSE '일반' END AS grade,
+    COALESCE(CAST(NULLIF(TRIM(point), '') AS INTEGER), 0)       AS point,
+    TRIM(region)                                                AS region
+FROM stg_member
+""")
+conn.commit()
+
+for r in cur.execute("SELECT * FROM clean_member ORDER BY uid"):
+    print(r)
+```
+
+중복 제거·표준화·공백 정리·타입 변환·결측 대치를 한 번에 적용해 새 테이블 `clean_member`를 만듭니다. 원본 `stg_member`는 손대지 않으므로 언제든 다시 정제할 수 있습니다.
+
+## 7주차 — 상품 제약 (`catalog.db`)
+
+**준비 코드 — 먼저 실행**
+
+```python
+import sqlite3
+
+conn = sqlite3.connect("catalog.db")
+cur = conn.cursor()
+```
+
+### 문제 10. 제약 조건이 있는 테이블 만들기
+
+```python
+cur.execute("DROP TABLE IF EXISTS products")
+cur.execute("""CREATE TABLE products(
+    pid      INTEGER PRIMARY KEY,
+    name     TEXT    NOT NULL,
+    price    INTEGER CHECK(price >= 0),
+    stock    INTEGER CHECK(stock >= 0),
+    category TEXT    CHECK(category IN ('식품','의류','전자'))
+)""")
+conn.commit()
+```
+
+테이블을 만들 때 제약 조건을 걸어 두면 규칙을 어긴 데이터는 저장되는 순간 거부됩니다. `NOT NULL`은 완전성, `CHECK`는 유효성을 데이터베이스 수준에서 강제합니다.
