@@ -25,7 +25,7 @@ book:
       chapters: [week06_lecture.qmd, week06_code.qmd, week06_quiz.qmd]
     - part: "7주차 : 데이터 품질 검증과 자동화"
       chapters: [week07_lecture.qmd, week07_code.qmd, week07_quiz.qmd]
-    - part: "중간고사 : 코드 기출문제"
+    - part: "중간고사 코드문제"
       chapters: [midterm_code.qmd]
     - part: "8주차 : 파이프라인 통합 실습"
       chapters: [week08_lecture.qmd, week08_code.qmd, week08_quiz.qmd]
