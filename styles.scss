@@ -381,3 +381,10 @@ svg[id^="mermaid-"] .edgeLabel .labelBkg {
 svg[id^="mermaid-"] .edgeLabel,
 svg[id^="mermaid-"] .edgeLabel text,
 svg[id^="mermaid-"] .edgeLabel .edgeLabel { fill: #4a4f57 !important; color: #4a4f57 !important; }
+
+// 한글 줄바꿈: 음절 중간이 아니라 어절 단위로 줄바꿈(표·본문·캡션)
+main.content p, main.content li, main.content td, main.content th,
+main.content figcaption, main.content h1, main.content h2, main.content h3, main.content h4 {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
