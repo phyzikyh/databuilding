@@ -33,7 +33,7 @@ book:
       chapters: [week09_lecture.qmd, week09_code.qmd, week09_quiz.qmd]
     - part: "10주차 : 이미지 라벨링"
       chapters: [week10_lecture.qmd, week10_code.qmd, week10_quiz.qmd]
-    - part: "11주차 : 텍스트·시계열 라벨링"
+    - part: "11주차 : 머신러닝·딥러닝 모델과 반복 학습 프로세스"
       chapters: [week11_lecture.qmd, week11_code.qmd, week11_quiz.qmd]
     - part: "12주차 : 데이터셋 검증과 편향 점검"
       chapters: [week12_lecture.qmd, week12_code.qmd, week12_quiz.qmd]
