@@ -1,0 +1,8 @@
+---
+title: "중간고사 보충수업"
+numbered: false
+toc: false
+---
+
+- [보충수업 강의자료 (HTML)](static/midterm-supplement/보충수업.html){target="_blank" rel="noopener"}
+- [연습문제 10문항 (학생용 Word)](static/midterm-supplement/보충수업_연습문제_10문항_학생용.docx){download="보충수업_연습문제_10문항_학생용.docx"}

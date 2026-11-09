@@ -1,6 +1,8 @@
 project:
   type: book
   output-dir: _book
+  resources:
+    - static/midterm-supplement/**
 
 book:
   title: "데이터구축실습"
@@ -37,6 +39,7 @@ book:
       chapters: [week11_lecture.qmd, week11_code.qmd, week11_quiz.qmd]
     - part: "12주차 : 데이터셋 검증과 편향 점검"
       chapters: [week12_lecture.qmd, week12_code.qmd, week12_quiz.qmd]
+    - midterm_supplement.qmd
     - part: "13주차 : 모델링 준비(인코딩·스케일링·특성공학)"
       chapters: [week13_lecture.qmd, week13_code.qmd, week13_quiz.qmd]
     - part: "14주차 : Baseline 모델링과 성능 평가"
